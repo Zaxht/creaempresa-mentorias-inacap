@@ -14,17 +14,17 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://monitoreo-mentorias-2026-inacap.zaxht.chatgpt.site'),
-  title: 'Monitoreo de mentorías 2026',
-  description: 'Panel editable para seguimiento de mentorías Crea Empresa.',
+  title: 'Gestión de mentorías 2026',
+  description: 'App de roles, perfiles, sesiones y exportación Excel para Crea Empresa.',
   openGraph: {
-    title: 'Monitoreo de mentorías 2026',
-    description: 'Panel editable para seguimiento de mentorías Crea Empresa.',
+    title: 'Gestión de mentorías 2026',
+    description: 'App de roles, perfiles, sesiones y exportación Excel para Crea Empresa.',
     images: ['/og.png'],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Monitoreo de mentorías 2026',
-    description: 'Panel editable para seguimiento de mentorías Crea Empresa.',
+    title: 'Gestión de mentorías 2026',
+    description: 'App de roles, perfiles, sesiones y exportación Excel para Crea Empresa.',
     images: ['/og.png'],
   },
 };
