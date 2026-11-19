@@ -67,7 +67,7 @@ La entrega debe acompañarse de evidencia del sistema conectado y una demostraci
 - Pruebas de rol: se usó temporalmente la misma cuenta como Mentor y Mentoreado. El mentor guardó su sesión y su Excel excluyó el conjunto ajeno; el mentoreado no tuvo edición de sesiones ni exportación. Al terminar se restauró Administrador.
 - Permanecen dos conjuntos identificados como PRUEBA QA, sin participantes reales, para reproducir la demostración.
 - Correcciones detectadas en navegador: botón Ingresar con type=submit, descarte de vistas autenticadas cuando no hay sesión, errores de validación comprensibles, bloqueo de acceso a demostración durante login y fecha automática en America/Santiago.
-- No se publicó una nueva versión del sitio hospedado durante este trabajo.
+- Actualización del 19 de noviembre: nueva versión publicada correctamente en Sites con las variables públicas de Supabase configuradas. La audiencia sigue siendo privada. La sesión del navegador integrado solicitó autenticación de ChatGPT, por lo que el flujo autenticado del hosting no se volvió a comprobar desde ese navegador.
 
 El lint conserva las comprobaciones de accesibilidad. En los componentes base reutilizables se exceptúa únicamente la preferencia estilística de etiqueta nativa sobre un rol ARIA válido, para conservar su contrato de composición.
 
@@ -112,3 +112,10 @@ El entorno local usa HTTP en localhost:3000; Supabase usa HTTPS/443. El equipo c
 Revisión del 19 de noviembre de 2026: npm ci instaló 660 paquetes en una copia limpia del código y npm run build terminó correctamente sin variables privadas. Esto verifica instalación y compilación; la conexión de una instalación nueva requiere configurar sus variables públicas. En el proyecto principal pasaron typecheck y lint; las 32 pruebas volvieron a aprobarse (18 corresponden al demostrador histórico). El build advierte un fragmento mayor de 500 kB, por lo que no se acredita una optimización completa de rendimiento.
 
 En navegador se comprobó el inicio de sesión real, apertura de fichas, despliegue individual de sesiones y guardado de un resumen ficticio; la interfaz confirmó «Cambios guardados en el programa». En escritorio no se observó desbordamiento horizontal (1226 px de contenido y viewport). El intento de emulación móvil no modificó el tamaño real del navegador; la verificación móvil queda pendiente y no se considera aprobada por las reglas responsive del CSS.
+
+
+## Publicación actual
+
+Publicación confirmada por Sites el 19 de noviembre de 2026: https://monitoreo-mentorias-2026-inacap.zaxht.chatgpt.site (privada). Fuente de la versión publicada: b510cdf6acba44d483b7975631f87ab154e61d3d. Variables SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY configuradas en el hosting. Repositorio privado: https://github.com/Zaxht/creaempresa-mentorias-inacap. El servidor de desarrollo permanece en http://localhost:3000.
+
+El informe técnico breve está en evidencias/Informe_EVA3.html y el registro de comprobaciones en evidencias/VERIFICACION.txt. El HTML es un complemento de implementación; no reemplaza ni modifica el Word anterior de otra asignatura. La vista del informe HTML no se pudo abrir en el navegador integrado porque este bloquea URLs file://; sus capturas se revisaron por separado.
