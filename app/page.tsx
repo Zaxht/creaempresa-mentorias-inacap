@@ -843,8 +843,8 @@ function WorkspaceView({
   };
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f5f9f6_0%,#eef6f3_42%,#f8fafc_100%)] text-foreground">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3 text-sm">
+    <main className="workspace min-h-screen bg-zinc-50 text-foreground">
+      <div className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-white/95 px-5 py-3 text-sm backdrop-blur">
         <div aria-live="polite">
           <strong>
             {repository
@@ -856,7 +856,9 @@ function WorkspaceView({
               ? 'Guardando…'
               : hasChanges
                 ? 'Cambios sin guardar'
-                : saveMessage}
+                : repository
+                  ? 'Todo guardado'
+                  : 'Guardado en este navegador'}
           </span>
         </div>
         <div className="flex gap-2">
@@ -893,12 +895,12 @@ function WorkspaceView({
         </div>
       </div>
       {saveMessage && (
-        <output className="block border-b bg-amber-50 px-5 py-2 text-sm">
+        <output className="block border-b border-zinc-200 bg-zinc-100 px-5 py-3 text-sm">
           {saveMessage}
         </output>
       )}
       <fieldset disabled={saving} className="min-w-0 border-0 p-0">
-        <header className="sticky top-0 z-30 border-b border-emerald-950/10 bg-white/92 backdrop-blur">
+        <header className="border-b border-zinc-200 bg-white">
           <div className="mx-auto flex max-w-[1500px] flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
             <div className="flex items-center gap-3">
               <div className="grid size-12 place-items-center rounded-lg border border-red-100 bg-white shadow-sm">
@@ -916,27 +918,37 @@ function WorkspaceView({
                   Crea Empresa
                 </p>
                 <h1 className="text-xl font-semibold sm:text-2xl">
-                  Gestión de mentorías 2026
+                  Gestión de mentorías
                 </h1>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <NativeSelect
-                value={role}
-                onChange={(event) =>
-                  handleRoleChange(event.target.value as Role)
-                }
-                aria-label="Rol activo"
-                disabled={repository !== null}
-                className="w-44"
-              >
-                {ROLES.map((item) => (
-                  <NativeSelectOption key={item} value={item}>
-                    {item}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              {repository ? (
+                <Badge
+                  variant="outline"
+                  className="gap-2 rounded-full px-4 py-2"
+                >
+                  <User className="size-4" />
+                  {role}
+                </Badge>
+              ) : (
+                <NativeSelect
+                  value={role}
+                  onChange={(event) =>
+                    handleRoleChange(event.target.value as Role)
+                  }
+                  aria-label="Rol activo"
+                  disabled={repository !== null}
+                  className="w-44"
+                >
+                  {ROLES.map((item) => (
+                    <NativeSelectOption key={item} value={item}>
+                      {item}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              )}
 
               {!repository && role === 'Mentor' && activeMentor ? (
                 <NativeSelect
@@ -968,21 +980,26 @@ function WorkspaceView({
                 </NativeSelect>
               ) : null}
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={resetDemo}
-                disabled={repository !== null}
-              >
-                Restaurar
-              </Button>
+              {!repository && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetDemo}
+                  disabled={repository !== null}
+                >
+                  Reiniciar demo
+                </Button>
+              )}
             </div>
           </div>
         </header>
 
-        <div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[248px_minmax(0,1fr)] lg:px-8">
-          <aside className="rounded-lg border border-emerald-950/10 bg-white p-3 shadow-sm lg:sticky lg:top-24 lg:self-start">
-            <nav className="grid gap-1" aria-label="Secciones">
+        <div className="mx-auto grid max-w-[1500px] gap-7 px-4 py-7 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:px-8">
+          <aside className="workspace-sidebar rounded-2xl border border-zinc-200 bg-white p-3 lg:sticky lg:top-24 lg:self-start">
+            <nav
+              className="flex gap-1 overflow-x-auto lg:grid"
+              aria-label="Secciones"
+            >
               {navigation.map((item) => (
                 <button
                   key={item.id}
@@ -990,9 +1007,9 @@ function WorkspaceView({
                   onClick={() => setActiveView(item.id)}
                   aria-current={activeView === item.id ? 'page' : undefined}
                   className={cn(
-                    'flex h-10 items-center gap-2 rounded-lg px-3 text-left text-sm font-medium transition-colors',
+                    'flex h-12 shrink-0 items-center gap-3 rounded-xl px-4 text-left text-sm font-medium transition-colors',
                     activeView === item.id
-                      ? 'bg-primary text-primary-foreground'
+                      ? 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-100'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
@@ -1002,19 +1019,19 @@ function WorkspaceView({
               ))}
             </nav>
 
-            <div className="mt-4 rounded-lg bg-[#0f322e] p-3 text-white">
-              <p className="text-xs font-semibold uppercase text-emerald-100">
+            <div className="mt-6 hidden rounded-xl bg-zinc-950 p-4 text-white lg:block">
+              <p className="text-xs font-semibold uppercase text-zinc-300">
                 Estado general
               </p>
               <div className="mt-3 flex items-end gap-2">
                 <span className="text-3xl font-semibold">
                   {metrics.completionRate}%
                 </span>
-                <span className="pb-1 text-sm text-emerald-100">cierre</span>
+                <span className="pb-1 text-sm text-zinc-300">cierre</span>
               </div>
               <div className="mt-3 h-2 rounded-full bg-white/15">
                 <div
-                  className="h-full rounded-full bg-[#f4c542]"
+                  className="h-full rounded-full bg-red-400"
                   style={{ width: `${metrics.completionRate}%` }}
                 />
               </div>
@@ -1149,8 +1166,13 @@ function DashboardView({
   );
 
   return (
-    <div className="grid gap-5">
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-6">
+      <PageHeading
+        eyebrow="Tu programa, de un vistazo"
+        title="Resumen del programa"
+        body="Revisa los avances y continúa acompañando a cada emprendimiento."
+      />
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           icon={<ClipboardCheck />}
           label="Mentorías"
@@ -1178,7 +1200,7 @@ function DashboardView({
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Panel administrador</h2>
@@ -1220,7 +1242,7 @@ function DashboardView({
           </div>
         </div>
 
-        <div className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
           <div className="mb-4 flex items-center gap-2">
             <Plus className="size-4 text-primary" aria-hidden="true" />
             <h2 className="text-lg font-semibold">Nueva mentoría</h2>
@@ -1312,7 +1334,7 @@ function DashboardView({
         </div>
       </section>
 
-      <section className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Requieren atención</h2>
           <Badge variant="outline">{attentionItems.length}</Badge>
@@ -1333,8 +1355,8 @@ function DashboardView({
             ))
           ) : (
             <EmptyState
-              title="Sin alertas"
-              body="Todas las mentorías están avanzando sin estados críticos."
+              title="Sin estados que requieran atención"
+              body="No hay mentorías suspendidas ni pendientes de derivación."
             />
           )}
         </div>
@@ -1375,7 +1397,7 @@ function MentorsView({
         body="Perfiles, especialidades y datos de contacto en formato de tarjetas."
       />
 
-      <section className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
         <div className="grid gap-3 lg:grid-cols-[1fr_220px_1fr_auto] lg:items-end">
           <FieldLabel label="Nombre">
             <Input
@@ -1458,7 +1480,7 @@ function MenteesView({
         body="Información del emprendimiento, etapa y necesidad principal."
       />
 
-      <section className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
         <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
           <FieldLabel label="Nombre">
             <Input
@@ -1648,7 +1670,7 @@ function MentorshipsView({
         body="Estados, avances, sesiones y evidencias en tarjetas de trabajo."
       />
 
-      <section className="rounded-lg border border-emerald-950/10 bg-white p-3 shadow-sm">
+      <section className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm">
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
           <label htmlFor="mentorship-search" className="relative block">
             <Search
@@ -1755,7 +1777,7 @@ function ExportView({
       />
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
           <div className="grid gap-4">
             <FieldLabel label="Nombre del archivo">
               <Input
@@ -1813,7 +1835,7 @@ function ExportView({
           </div>
         </div>
 
-        <div className="rounded-lg border border-emerald-950/10 bg-[#0f322e] p-4 text-white shadow-sm">
+        <div className="rounded-lg border border-zinc-200 bg-[#0f322e] p-4 text-white shadow-sm">
           <div className="mb-6 flex items-center justify-between">
             <Image
               unoptimized
@@ -1853,14 +1875,16 @@ function MetricCard({
   helper: string;
 }) {
   return (
-    <article className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
       <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-        <span className="grid size-8 place-items-center rounded-lg bg-accent text-accent-foreground [&_svg]:size-4">
+        <span className="grid size-10 place-items-center rounded-xl bg-red-50 text-red-700 [&_svg]:size-4">
           {icon}
         </span>
         {label}
       </div>
-      <p className="text-2xl font-semibold">{value}</p>
+      <p className="text-3xl font-semibold tracking-tight tabular-nums">
+        {value}
+      </p>
       <p className="mt-1 text-sm text-muted-foreground">{helper}</p>
     </article>
   );
@@ -1895,9 +1919,7 @@ function FieldLabel({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-xs font-semibold uppercase text-muted-foreground">
-        {label}
-      </span>
+      <span className="text-sm font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
   );
@@ -1961,82 +1983,98 @@ function MentorCard({
   ) => void;
 }) {
   return (
-    <article className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <div className="flex shrink-0 flex-col items-start gap-3">
-          <Avatar name={mentor.name} photo={mentor.photo} size="lg" />
-          <UploadLabel icon={<Camera />} label="Foto">
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              className="sr-only"
-              onChange={(event) => handleMentorPhoto(mentor.id, event)}
-            />
-          </UploadLabel>
-        </div>
-        <div className="grid min-w-0 flex-1 gap-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <FieldLabel label="Nombre">
-              <Input
-                value={mentor.name}
-                onChange={(event) =>
-                  updateMentor(mentor.id, { name: event.target.value })
-                }
-              />
-            </FieldLabel>
-            <FieldLabel label="Perfil">
-              <Input
-                value={mentor.title}
-                onChange={(event) =>
-                  updateMentor(mentor.id, { title: event.target.value })
-                }
-              />
-            </FieldLabel>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <FieldLabel label="Correo">
-              <Input
-                value={mentor.email}
-                onChange={(event) =>
-                  updateMentor(mentor.id, { email: event.target.value })
-                }
-                placeholder="correo@dominio.cl"
-              />
-            </FieldLabel>
-            <FieldLabel label="Teléfono">
-              <Input
-                value={mentor.phone}
-                onChange={(event) =>
-                  updateMentor(mentor.id, { phone: event.target.value })
-                }
-                placeholder="+56"
-              />
-            </FieldLabel>
-          </div>
-          <FieldLabel label="Especialidades">
-            <Input
-              value={mentor.expertise.join(', ')}
-              onChange={(event) =>
-                updateMentor(mentor.id, {
-                  expertise: event.target.value
-                    .split(',')
-                    .map((item) => item.trim())
-                    .filter(Boolean),
-                })
-              }
-            />
-          </FieldLabel>
-          <FieldLabel label="Bio">
-            <Textarea
-              value={mentor.bio}
-              onChange={(event) =>
-                updateMentor(mentor.id, { bio: event.target.value })
-              }
-              className="min-h-20"
-            />
-          </FieldLabel>
+    <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+      <div className="mb-5 flex items-center gap-4">
+        <Avatar name={mentor.name} photo={mentor.photo} size="lg" />
+        <div className="min-w-0">
+          <h3 className="break-words text-lg font-semibold tracking-tight">
+            {mentor.name}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {mentor.title || 'Perfil del programa'}
+          </p>
         </div>
       </div>
+      <details className="group">
+        <summary className="cursor-pointer rounded-lg bg-zinc-50 px-3 py-3 text-sm font-medium text-primary hover:bg-red-50">
+          Ver y editar ficha
+        </summary>
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row">
+          <div className="flex shrink-0 flex-col items-start gap-3">
+            <Avatar name={mentor.name} photo={mentor.photo} size="lg" />
+            <UploadLabel icon={<Camera />} label="Foto">
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                className="sr-only"
+                onChange={(event) => handleMentorPhoto(mentor.id, event)}
+              />
+            </UploadLabel>
+          </div>
+          <div className="grid min-w-0 flex-1 gap-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <FieldLabel label="Nombre">
+                <Input
+                  value={mentor.name}
+                  onChange={(event) =>
+                    updateMentor(mentor.id, { name: event.target.value })
+                  }
+                />
+              </FieldLabel>
+              <FieldLabel label="Perfil">
+                <Input
+                  value={mentor.title}
+                  onChange={(event) =>
+                    updateMentor(mentor.id, { title: event.target.value })
+                  }
+                />
+              </FieldLabel>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <FieldLabel label="Correo">
+                <Input
+                  value={mentor.email}
+                  onChange={(event) =>
+                    updateMentor(mentor.id, { email: event.target.value })
+                  }
+                  placeholder="correo@dominio.cl"
+                />
+              </FieldLabel>
+              <FieldLabel label="Teléfono">
+                <Input
+                  value={mentor.phone}
+                  onChange={(event) =>
+                    updateMentor(mentor.id, { phone: event.target.value })
+                  }
+                  placeholder="+56"
+                />
+              </FieldLabel>
+            </div>
+            <FieldLabel label="Especialidades">
+              <Input
+                value={mentor.expertise.join(', ')}
+                onChange={(event) =>
+                  updateMentor(mentor.id, {
+                    expertise: event.target.value
+                      .split(',')
+                      .map((item) => item.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
+            </FieldLabel>
+            <FieldLabel label="Bio">
+              <Textarea
+                value={mentor.bio}
+                onChange={(event) =>
+                  updateMentor(mentor.id, { bio: event.target.value })
+                }
+                className="min-h-20"
+              />
+            </FieldLabel>
+          </div>
+        </div>
+      </details>
       <div className="mt-4 grid gap-2 border-t border-border pt-4 sm:grid-cols-3">
         <MiniStat label="Mentorías" value={stats.total} />
         <MiniStat label="Terminadas" value={stats.finished} />
@@ -2061,77 +2099,93 @@ function MenteeCard({
   ) => void;
 }) {
   return (
-    <article className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <div className="flex shrink-0 flex-col items-start gap-3">
-          <Avatar name={mentee.name} photo={mentee.photo} size="lg" />
-          <UploadLabel icon={<Camera />} label="Foto">
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              className="sr-only"
-              onChange={(event) => handleMenteePhoto(mentee.id, event)}
-            />
-          </UploadLabel>
-        </div>
-        <div className="grid min-w-0 flex-1 gap-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <FieldLabel label="Nombre">
-              <Input
-                value={mentee.name}
-                onChange={(event) =>
-                  updateMentee(mentee.id, { name: event.target.value })
-                }
-              />
-            </FieldLabel>
-            <FieldLabel label="Emprendimiento">
-              <Input
-                value={mentee.venture}
-                onChange={(event) =>
-                  updateMentee(mentee.id, { venture: event.target.value })
-                }
-              />
-            </FieldLabel>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <FieldLabel label="Etapa">
-              <Input
-                value={mentee.stage}
-                onChange={(event) =>
-                  updateMentee(mentee.id, { stage: event.target.value })
-                }
-              />
-            </FieldLabel>
-            <FieldLabel label="Correo">
-              <Input
-                value={mentee.email}
-                onChange={(event) =>
-                  updateMentee(mentee.id, { email: event.target.value })
-                }
-                placeholder="correo@dominio.cl"
-              />
-            </FieldLabel>
-            <FieldLabel label="Teléfono">
-              <Input
-                value={mentee.phone}
-                onChange={(event) =>
-                  updateMentee(mentee.id, { phone: event.target.value })
-                }
-                placeholder="+56"
-              />
-            </FieldLabel>
-          </div>
-          <FieldLabel label="Necesidad principal">
-            <Textarea
-              value={mentee.need}
-              onChange={(event) =>
-                updateMentee(mentee.id, { need: event.target.value })
-              }
-              className="min-h-20"
-            />
-          </FieldLabel>
+    <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+      <div className="mb-5 flex items-center gap-4">
+        <Avatar name={mentee.name} photo={mentee.photo} size="lg" />
+        <div className="min-w-0">
+          <h3 className="break-words text-lg font-semibold tracking-tight">
+            {mentee.name}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {mentee.venture || 'Perfil del programa'}
+          </p>
         </div>
       </div>
+      <details className="group">
+        <summary className="cursor-pointer rounded-lg bg-zinc-50 px-3 py-3 text-sm font-medium text-primary hover:bg-red-50">
+          Ver y editar ficha
+        </summary>
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row">
+          <div className="flex shrink-0 flex-col items-start gap-3">
+            <Avatar name={mentee.name} photo={mentee.photo} size="lg" />
+            <UploadLabel icon={<Camera />} label="Foto">
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                className="sr-only"
+                onChange={(event) => handleMenteePhoto(mentee.id, event)}
+              />
+            </UploadLabel>
+          </div>
+          <div className="grid min-w-0 flex-1 gap-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <FieldLabel label="Nombre">
+                <Input
+                  value={mentee.name}
+                  onChange={(event) =>
+                    updateMentee(mentee.id, { name: event.target.value })
+                  }
+                />
+              </FieldLabel>
+              <FieldLabel label="Emprendimiento">
+                <Input
+                  value={mentee.venture}
+                  onChange={(event) =>
+                    updateMentee(mentee.id, { venture: event.target.value })
+                  }
+                />
+              </FieldLabel>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <FieldLabel label="Etapa">
+                <Input
+                  value={mentee.stage}
+                  onChange={(event) =>
+                    updateMentee(mentee.id, { stage: event.target.value })
+                  }
+                />
+              </FieldLabel>
+              <FieldLabel label="Correo">
+                <Input
+                  value={mentee.email}
+                  onChange={(event) =>
+                    updateMentee(mentee.id, { email: event.target.value })
+                  }
+                  placeholder="correo@dominio.cl"
+                />
+              </FieldLabel>
+              <FieldLabel label="Teléfono">
+                <Input
+                  value={mentee.phone}
+                  onChange={(event) =>
+                    updateMentee(mentee.id, { phone: event.target.value })
+                  }
+                  placeholder="+56"
+                />
+              </FieldLabel>
+            </div>
+            <FieldLabel label="Necesidad principal">
+              <Textarea
+                value={mentee.need}
+                onChange={(event) =>
+                  updateMentee(mentee.id, { need: event.target.value })
+                }
+                className="min-h-20"
+              />
+            </FieldLabel>
+          </div>
+        </div>
+      </details>
       <div className="mt-4 grid gap-2 border-t border-border pt-4 sm:grid-cols-3">
         <MiniStat label="Mentorías" value={stats.total} />
         <MiniStat label="Terminadas" value={stats.finished} />
@@ -2179,7 +2233,7 @@ function MentorshipCard({
   const progress = Math.round((completed / 6) * 100);
 
   return (
-    <article className="rounded-lg border border-emerald-950/10 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -2406,108 +2460,125 @@ function SessionTile({
   ) => void;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-muted/25 p-3">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <Badge variant="outline" className={sessionTones[session.status]}>
-          Sesión {session.number}
-        </Badge>
-        <NativeSelect
-          value={session.status}
-          onChange={(event) => {
-            const nextStatus = event.target.value as SessionStatus;
-            updateSession(mentorshipId, session.number, {
-              status: nextStatus,
-              date:
-                nextStatus === 'Realizada' && !session.date
-                  ? todayIso()
-                  : session.date,
-            });
-          }}
-          disabled={!canEdit}
-          aria-label={`Estado sesión ${session.number}`}
-          className="w-36"
-          size="sm"
-        >
-          {SESSION_STATUSES.map((status) => (
-            <NativeSelectOption key={status} value={status}>
-              {status}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-      </div>
-
-      <div className="grid gap-2">
-        <Input
-          type="date"
-          value={session.date}
-          disabled={!canEdit}
-          onChange={(event) =>
-            updateSession(mentorshipId, session.number, {
-              date: event.target.value,
-            })
-          }
-          aria-label={`Fecha sesión ${session.number}`}
-        />
-        <Textarea
-          value={session.summary}
-          disabled={!canEdit}
-          onChange={(event) =>
-            updateSession(mentorshipId, session.number, {
-              summary: event.target.value,
-            })
-          }
-          placeholder="Resumen de acuerdos"
-          className="min-h-20"
-          aria-label={`Resumen sesión ${session.number}`}
-        />
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <UploadLabel icon={<Camera />} label="Foto" disabled={!canEdit}>
-          <input
-            type="file"
-            accept="image/png,image/jpeg"
-            className="sr-only"
+    <details
+      className="session-card self-start rounded-xl border border-border bg-white p-4"
+      open={session.number === 1}
+    >
+      <summary className="cursor-pointer text-sm font-semibold">
+        Sesión {session.number}
+        <span className="ml-3 font-normal text-muted-foreground">
+          {session.status}
+        </span>
+        <p className="mt-1 text-sm font-normal text-muted-foreground">
+          {session.date || 'Sin fecha'} ·{' '}
+          {session.photo || session.document
+            ? 'Con evidencias'
+            : 'Sin evidencias'}
+        </p>
+      </summary>
+      <div className="mt-4 border-t pt-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <Badge variant="outline" className={sessionTones[session.status]}>
+            Sesión {session.number}
+          </Badge>
+          <NativeSelect
+            value={session.status}
+            onChange={(event) => {
+              const nextStatus = event.target.value as SessionStatus;
+              updateSession(mentorshipId, session.number, {
+                status: nextStatus,
+                date:
+                  nextStatus === 'Realizada' && !session.date
+                    ? todayIso()
+                    : session.date,
+              });
+            }}
             disabled={!canEdit}
-            onChange={(event) =>
-              handleSessionAttachment(
-                mentorshipId,
-                session.number,
-                event,
-                'photo',
-              )
-            }
-          />
-        </UploadLabel>
-        <UploadLabel icon={<Upload />} label="Documento" disabled={!canEdit}>
-          <input
-            type="file"
-            accept="application/pdf"
-            className="sr-only"
-            disabled={!canEdit}
-            onChange={(event) =>
-              handleSessionAttachment(
-                mentorshipId,
-                session.number,
-                event,
-                'document',
-              )
-            }
-          />
-        </UploadLabel>
-      </div>
-
-      {session.photo || session.document ? (
-        <div className="mt-3 grid gap-2">
-          {session.photo ? (
-            <AttachmentPill attachment={session.photo} icon={<Camera />} />
-          ) : null}
-          {session.document ? (
-            <AttachmentPill attachment={session.document} icon={<File />} />
-          ) : null}
+            aria-label={`Estado sesión ${session.number}`}
+            className="w-36"
+            size="sm"
+          >
+            {SESSION_STATUSES.map((status) => (
+              <NativeSelectOption key={status} value={status}>
+                {status}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
         </div>
-      ) : null}
-    </div>
+
+        <div className="grid gap-2">
+          <Input
+            type="date"
+            value={session.date}
+            disabled={!canEdit}
+            onChange={(event) =>
+              updateSession(mentorshipId, session.number, {
+                date: event.target.value,
+              })
+            }
+            aria-label={`Fecha sesión ${session.number}`}
+          />
+          <Textarea
+            value={session.summary}
+            disabled={!canEdit}
+            onChange={(event) =>
+              updateSession(mentorshipId, session.number, {
+                summary: event.target.value,
+              })
+            }
+            placeholder="Resumen de acuerdos"
+            className="min-h-20"
+            aria-label={`Resumen sesión ${session.number}`}
+          />
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <UploadLabel icon={<Camera />} label="Foto" disabled={!canEdit}>
+            <input
+              type="file"
+              accept="image/png,image/jpeg"
+              className="sr-only"
+              disabled={!canEdit}
+              onChange={(event) =>
+                handleSessionAttachment(
+                  mentorshipId,
+                  session.number,
+                  event,
+                  'photo',
+                )
+              }
+            />
+          </UploadLabel>
+          <UploadLabel icon={<Upload />} label="Documento" disabled={!canEdit}>
+            <input
+              type="file"
+              accept="application/pdf"
+              className="sr-only"
+              disabled={!canEdit}
+              onChange={(event) =>
+                handleSessionAttachment(
+                  mentorshipId,
+                  session.number,
+                  event,
+                  'document',
+                )
+              }
+            />
+          </UploadLabel>
+        </div>
+
+        {session.photo || session.document ? (
+          <div className="mt-3 grid gap-2">
+            {session.photo ? (
+              <AttachmentPill attachment={session.photo} icon={<Camera />} />
+            ) : null}
+            {session.document ? (
+              <AttachmentPill attachment={session.document} icon={<File />} />
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -2665,9 +2736,7 @@ function AttachmentPill({
 function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-lg bg-muted/45 px-3 py-2">
-      <p className="text-xs font-semibold uppercase text-muted-foreground">
-        {label}
-      </p>
+      <p className="text-sm font-medium text-muted-foreground">{label}</p>
       <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
     </div>
   );
@@ -2688,7 +2757,6 @@ function CheckSelect({
       disabled={disabled}
       onChange={(event) => onChange(event.target.value as CheckValue)}
       className="w-full"
-      aria-label="Estado de control"
     >
       {CHECK_OPTIONS.map((option) => (
         <NativeSelectOption key={option} value={option}>
@@ -2718,9 +2786,7 @@ function ExcelPreviewMetric({
 }) {
   return (
     <div className="rounded-lg bg-white/10 p-3">
-      <p className="text-xs font-semibold uppercase text-emerald-100">
-        {label}
-      </p>
+      <p className="text-xs font-semibold uppercase text-zinc-300">{label}</p>
       <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
     </div>
   );

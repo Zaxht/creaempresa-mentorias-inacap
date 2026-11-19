@@ -46,9 +46,10 @@ export default defineConfig(async () => {
 
   return {
     css: { postcss: { plugins: [tailwindcss()] } },
-    server: isCodexSeatbeltSandbox
-      ? { watch: { useFsEvents: false, usePolling: true } }
-      : undefined,
+    server: { watch: {
+      ignored: ['**/tmp/**', '**/evidencias/**', '**/outputs/**', '**/work/**'],
+      ...(isCodexSeatbeltSandbox ? { useFsEvents: false, usePolling: true } : {}),
+    } },
     plugins: [
       vinext(),
       sites(),

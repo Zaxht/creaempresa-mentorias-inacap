@@ -23,6 +23,9 @@
     "typeCheck": true
   },
   "ignorePatterns": [
+    "tmp/**",
+    "work/**",
+    "outputs/**",
     ".next/**",
     ".vinext/**",
     "out/**",

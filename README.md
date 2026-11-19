@@ -35,7 +35,7 @@ El backend efectivo es Supabase: se conserva la separación por capas, pero no s
 
 `get_workspace()` extrae los registros aplicando RLS y se usa también antes de exportar. `save_changes()` valida y guarda cada lote en una transacción. `dashboard_summary()` permite extraer indicadores desde SQL. Las funciones RPC delegan en los procedimientos `read_workspace(INOUT result jsonb)` y `apply_changes(commands jsonb)` mediante `CALL`. Así se ejecutan procedimientos reales de PostgreSQL tanto para extraer como para guardar información; las funciones sirven de adaptador para PostgREST.
 
-Las sesiones de Auth permanecen solo en memoria del navegador. Recargar exige iniciar sesión nuevamente. Las escrituras se limitan a 120 lotes por minuto por cuenta. El límite de intentos de login y las políticas de duración/concurrencia de sesiones se configuran en Supabase Auth y deben verificarse en el proyecto real; no se consideran acreditadas por estas pruebas locales.
+Las sesiones de Auth permanecen solo en memoria del navegador. Recargar exige iniciar sesión nuevamente. Las escrituras se limitan a 120 lotes por minuto por cuenta. En Supabase Auth se configuraron y guardaron 10 solicitudes de registro/inicio de sesión cada 5 minutos por IP. Los tokens de acceso duran 3600 segundos; la detección de reutilización de refresh tokens está activa, con intervalo de 10 segundos. Se verificó que la sesión única, el tiempo máximo y el cierre por inactividad están restringidos al plan Pro: siguen pendientes y no se simulan como controles de seguridad del servidor. La renovación automática de tokens significa que 3600 segundos NO es la duración máxima de una sesión.
 
 Las evidencias permanecen en un bucket privado, con rutas autorizadas por usuario y sin sobrescrituras. Se valida firma de archivo en cliente y tamaño/MIME en Storage y SQL. Esto **no equivale a un análisis antivirus en servidor**. Los archivos cargados pero no guardados, o reemplazados, requieren una política posterior de limpieza; no se borran automáticamente documentos del programa.
 
@@ -70,3 +70,45 @@ La entrega debe acompañarse de evidencia del sistema conectado y una demostraci
 - No se publicó una nueva versión del sitio hospedado durante este trabajo.
 
 El lint conserva las comprobaciones de accesibilidad. En los componentes base reutilizables se exceptúa únicamente la preferencia estilística de etiqueta nativa sobre un rol ARIA válido, para conservar su contrato de composición.
+
+
+## Decisión de arquitectura para EVA3
+
+La solución utiliza cliente-servidor y separación por capas. React/TypeScript presenta la interfaz; dominio y cambios preparan las operaciones; MentoriasRepository conecta con Supabase Auth, PostgreSQL y Storage. Vinext/Vite genera el frontend y el Worker que entrega la configuración pública. La autorización efectiva reside en PostgreSQL/RLS y Storage. Se sustituye la propuesta anterior de un servidor Express por servicios administrados para reducir la instalación y mantener autenticación, datos y archivos en el mismo proveedor. El ejemplo SQLite anterior se conserva como antecedente académico, no como backend de esta web.
+
+```mermaid
+flowchart TD
+  A[Administrador · Mentor · Mentoreado] --> B[React y TypeScript / presentación]
+  B --> C[Dominio y cambios / lib/mentorias]
+  C --> D[Repository / integración]
+  D --> E[Supabase Auth]
+  D --> F[PostgREST RPC]
+  D --> G[Storage privado]
+  F --> H[Procedimientos read_workspace y apply_changes]
+  H --> I[PostgreSQL / RLS y restricciones]
+  G --> I
+  J[Worker Vinext / configuración pública] --> B
+```
+
+El modelo relaciona mentors y mentees con mentorships; cada mentoría tiene seis sessions y cada sesión admite una evidence por tipo (foto/documento). app_profiles vincula la identidad de Auth y su rol. audit_events y write_limits soportan auditoría y control de escrituras. Las claves foráneas evitan referencias inexistentes; la unicidad evita repetir sesiones y tipos de evidencia. Los archivos binarios se guardan en Storage y sus metadatos en PostgreSQL. Las especialidades del mentor usan text[] como colección de etiquetas; no se declara una normalización estricta a primera forma normal de ese atributo. Si se necesita un catálogo compartido de especialidades, deberá separarse en tablas de catálogo y asociación.
+
+## Entrega y demostración
+
+Las capturas de `evidencias/` documentan la interfaz y los ajustes observados. El documento de EVA3 describe la implementación actual y sus límites; no modifica el informe de otra asignatura. La demostración puede seguir este recorrido: iniciar sesión, revisar el resumen, abrir una ficha, abrir una mentoría, desplegar una sesión, registrar su resumen y guardar; finalmente elegir las hojas y exportar Excel. Los datos PRUEBA QA son ficticios y deben identificarse como tales.
+
+El entorno local usa HTTP en localhost:3000; Supabase usa HTTPS/443. El equipo cliente ejecuta el navegador y el entorno de desarrollo, mientras Supabase administra cómputo y almacenamiento. La instalación local se reproduce con Node 24, npm ci, las variables públicas y npm run dev. La publicación del frontend requiere además configurar las variables en el hosting; nunca se incluyen contraseñas ni claves service_role.
+
+### Límites conocidos
+
+- Sesión única, duración máxima e inactividad del servidor: no disponibles en el plan gratuito observado. No se contrató Pro.
+- El control de carga de archivos no incluye antivirus; falta automatizar la limpieza de objetos huérfanos.
+- La creación y vinculación de cuentas se realiza desde Supabase, no desde un módulo de invitaciones de la web.
+- No se han acreditado pruebas de carga, restauración de respaldos ni auditoría integral de accesibilidad.
+- La publicación conserva la audiencia privada del sitio. Un enlace publicado no otorga por sí solo acceso al docente.
+
+
+## Verificación de la actualización visual
+
+Revisión del 19 de noviembre de 2026: npm ci instaló 660 paquetes en una copia limpia del código y npm run build terminó correctamente sin variables privadas. Esto verifica instalación y compilación; la conexión de una instalación nueva requiere configurar sus variables públicas. En el proyecto principal pasaron typecheck y lint; las 32 pruebas volvieron a aprobarse (18 corresponden al demostrador histórico). El build advierte un fragmento mayor de 500 kB, por lo que no se acredita una optimización completa de rendimiento.
+
+En navegador se comprobó el inicio de sesión real, apertura de fichas, despliegue individual de sesiones y guardado de un resumen ficticio; la interfaz confirmó «Cambios guardados en el programa». En escritorio no se observó desbordamiento horizontal (1226 px de contenido y viewport). El intento de emulación móvil no modificó el tamaño real del navegador; la verificación móvil queda pendiente y no se considera aprobada por las reglas responsive del CSS.

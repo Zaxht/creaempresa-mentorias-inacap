@@ -1,0 +1,19 @@
+EVIDENCIAS EVA3 · CREA EMPRESA
+Fecha de revisión: 19 de noviembre de 2026
+
+acceso.png: pantalla de acceso actual, sin credenciales visibles.
+dashboard.png: administrador conectado a datos ficticios de Supabase.
+sesiones.png: sesiones desplegables, resumen guardado y enlaces privados.
+auth-rate-limit.png: límite configurado de 10 accesos por 5 minutos e IP.
+auth-sessions.png: ajustes observados y restricción del plan gratuito.
+
+Arquitectura vigente y modelo: README.md, sección Decisión de arquitectura para EVA3.
+Rutinas reales: supabase/migrations/202611180001_mentorias.sql, procedimientos read_workspace y apply_changes.
+Entrada de datos: lib/mentorias/repository.ts -> RPC save_changes -> CALL apply_changes.
+Extracción: lib/mentorias/repository.ts -> RPC get_workspace -> CALL read_workspace, bajo RLS.
+
+Verificación automática: 32 pruebas aprobadas, incluidas 18 del demostrador histórico. Typecheck y lint aprobados. npm ci y build aprobados desde copia limpia.
+Verificación manual actual: login, ficha desplegable, sesión desplegable, edición de resumen y confirmación de guardado contra Supabase.
+Pruebas anteriores: creación de personas y mentorías, seis sesiones, fotos/PDF, exportaciones y aislamiento de los roles Mentor y Mentoreado. Se restauró Administrador al terminar.
+
+Límites: no se ha ejecutado una auditoría de seguridad completa. La sesión única y los tiempos de sesión del servidor requieren Pro en la configuración observada. La emulación móvil no aplicó el viewport solicitado; requiere verificación efectiva. No se declara que las pruebas del demostrador acrediten toda la web.
