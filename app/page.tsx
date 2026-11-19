@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 
 import {
   useEffect,
@@ -8,11 +9,8 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  BarChart3,
-  Briefcase,
   CalendarDays,
   Camera,
-  CheckCircle2,
   ClipboardCheck,
   Clock3,
   Download,
@@ -20,11 +18,9 @@ import {
   FileSpreadsheet,
   FolderOpen,
   LayoutDashboard,
-  Mail,
   Paperclip,
   Plus,
   Search,
-  ShieldCheck,
   Upload,
   User,
   UserCheck,
@@ -40,125 +36,50 @@ import {
 } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { MentoriasAccess } from '@/components/mentorias-access';
+import {
+  MentoriasRepository,
+  type Workspace,
+} from '@/lib/mentorias/repository';
+import { scopeState, validateFile, programDate } from '@/lib/mentorias/access';
+import { collectChanges } from '@/lib/mentorias/changes';
+import {
+  getMetrics,
+  getMentorStats,
+  getMenteeStats,
+} from '@/lib/mentorias/metrics';
+import {
+  imageToBase64,
+  downloadBlob,
+  addSummarySheet,
+  addMentorsSheet,
+  addMenteesSheet,
+  addMentorshipsSheet,
+  addSessionsSheet,
+} from '@/lib/mentorias/reports';
+import {
+  MONTHS,
+  MENTORSHIP_STATUSES,
+  SERVICES,
+  CHECK_OPTIONS,
+  SESSION_STATUSES,
+  ROLES,
+  type Role,
+  type View,
+  type MentorshipStatus,
+  type SessionStatus,
+  type CheckValue,
+  type Attachment,
+  type SessionRecord,
+  type Mentor,
+  type Mentee,
+  type Mentorship,
+  type AppState,
+  type ExportOptions,
+} from '@/lib/mentorias/domain';
 
 const STORAGE_KEY = 'creaempresa-mentorias-app-v2';
 const LOGO_PATH = '/logoinacap.png';
-
-const MONTHS = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
-];
-
-const MENTORSHIP_STATUSES = [
-  'Suspendida',
-  'En proceso',
-  'Terminada',
-  'No corresponde',
-  'Esperando derivación',
-  'Derivada',
-] as const;
-
-const SERVICES = [
-  'Mentoría administrativa y financiera',
-  'Mentoría en gestión comercial',
-  'Mentoría en informática y ciberseguridad',
-] as const;
-
-const CHECK_OPTIONS = ['Pendiente', 'Sí', 'No', 'No corresponde'] as const;
-const SESSION_STATUSES = [
-  'Pendiente',
-  'Agendada',
-  'Realizada',
-  'Reprogramada',
-] as const;
-const ROLES = ['Administrador', 'Mentor', 'Mentoreado'] as const;
-
-type Role = (typeof ROLES)[number];
-type View = 'dashboard' | 'mentors' | 'mentees' | 'mentorships' | 'profile' | 'export';
-type MentorshipStatus = (typeof MENTORSHIP_STATUSES)[number];
-type SessionStatus = (typeof SESSION_STATUSES)[number];
-type CheckValue = (typeof CHECK_OPTIONS)[number];
-
-type Attachment = {
-  name: string;
-  type: string;
-  size: number;
-  dataUrl: string;
-};
-
-type SessionRecord = {
-  number: number;
-  date: string;
-  status: SessionStatus;
-  summary: string;
-  photo?: Attachment;
-  document?: Attachment;
-};
-
-type Mentor = {
-  id: string;
-  name: string;
-  title: string;
-  email: string;
-  phone: string;
-  expertise: string[];
-  bio: string;
-  photo?: string;
-};
-
-type Mentee = {
-  id: string;
-  name: string;
-  venture: string;
-  stage: string;
-  email: string;
-  phone: string;
-  need: string;
-  photo?: string;
-};
-
-type Mentorship = {
-  id: string;
-  sourceNumber: number;
-  mentorId: string;
-  menteeId: string;
-  month: string;
-  hours: number;
-  space: string;
-  status: MentorshipStatus;
-  service: string;
-  formalization: CheckValue;
-  planningSir: CheckValue;
-  executionSir: CheckValue;
-  paidAt: string;
-  goal: string;
-  sessions: SessionRecord[];
-};
-
-type AppState = {
-  mentors: Mentor[];
-  mentees: Mentee[];
-  mentorships: Mentorship[];
-};
-
-type ExportOptions = {
-  summary: boolean;
-  mentors: boolean;
-  mentees: boolean;
-  mentorships: boolean;
-  sessions: boolean;
-  attachments: boolean;
-};
 
 const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   summary: true,
@@ -325,7 +246,7 @@ function normalizeState(state: Partial<AppState>): AppState {
     executionSir: mentorship.executionSir || 'Pendiente',
     sessions: Array.from({ length: 6 }, (_, sessionIndex) => ({
       ...createSessions()[sessionIndex],
-      ...(mentorship.sessions?.[sessionIndex] ?? {}),
+      ...mentorship.sessions?.[sessionIndex],
       number: sessionIndex + 1,
     })),
   }));
@@ -347,12 +268,8 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-function makeId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return programDate();
 }
 
 function formatHours(value: number) {
@@ -375,7 +292,7 @@ function readFile(file: File): Promise<Attachment> {
         name: file.name,
         type: file.type,
         size: file.size,
-        dataUrl: String(reader.result),
+        dataUrl: typeof reader.result === 'string' ? reader.result : '',
       });
     reader.onerror = reject;
     reader.readAsDataURL(file);
@@ -385,7 +302,10 @@ function readFile(file: File): Promise<Attachment> {
 function sanitizeFilename(name: string) {
   const cleaned = name
     .trim()
-    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
+    .replace(/[<>:"/\\|?*]/g, '-')
+    .split('')
+    .filter((char) => char.charCodeAt(0) >= 32)
+    .join('')
     .replace(/\s+/g, '-')
     .toLowerCase();
 
@@ -393,12 +313,47 @@ function sanitizeFilename(name: string) {
 }
 
 export default function Home() {
-  const [state, setState] = useState<AppState>(DEFAULT_STATE);
+  return (
+    <MentoriasAccess>
+      {(repository, workspace, exit) => (
+        <WorkspaceView
+          repository={repository}
+          workspace={workspace}
+          exit={exit}
+        />
+      )}
+    </MentoriasAccess>
+  );
+}
+
+function WorkspaceView({
+  repository,
+  workspace,
+  exit,
+}: {
+  repository: MentoriasRepository | null;
+  workspace: Workspace | null;
+  exit: () => void;
+}) {
+  const [original, setOriginal] = useState<AppState>(
+    workspace?.state ?? DEFAULT_STATE,
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [state, setState] = useState<AppState>(
+    workspace?.state ?? DEFAULT_STATE,
+  );
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [role, setRole] = useState<Role>('Administrador');
-  const [activeView, setActiveView] = useState<View>('dashboard');
-  const [activeMentorId, setActiveMentorId] = useState(DEFAULT_MENTORS[0].id);
-  const [activeMenteeId, setActiveMenteeId] = useState(DEFAULT_MENTEES[0].id);
+  const [role, setRole] = useState<Role>(workspace?.role ?? 'Administrador');
+  const [activeView, setActiveView] = useState<View>(
+    defaultViewForRole(workspace?.role ?? 'Administrador'),
+  );
+  const [activeMentorId, setActiveMentorId] = useState(
+    workspace?.mentorId ?? DEFAULT_MENTORS[0].id,
+  );
+  const [activeMenteeId, setActiveMenteeId] = useState(
+    workspace?.menteeId ?? DEFAULT_MENTEES[0].id,
+  );
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [saveWarning, setSaveWarning] = useState('');
@@ -419,42 +374,93 @@ export default function Home() {
     need: '',
   });
   const [newMentorship, setNewMentorship] = useState({
-    mentorId: DEFAULT_MENTORS[0].id,
-    menteeId: DEFAULT_MENTEES[0].id,
+    mentorId: workspace?.state.mentors[0]?.id ?? DEFAULT_MENTORS[0].id,
+    menteeId: workspace?.state.mentees[0]?.id ?? DEFAULT_MENTEES[0].id,
     month: MONTHS[new Date().getMonth()],
-    service: SERVICES[0],
+    service: SERVICES[0] as string,
   });
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-
-    if (stored) {
-      try {
+    if (repository) return;
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        // eslint-disable-next-line react/react-compiler -- Hydrate browser-only demonstration after SSR.
         setState(normalizeState(JSON.parse(stored) as Partial<AppState>));
-      } catch {
-        setState(DEFAULT_STATE);
       }
+    } catch {
+      setSaveWarning('No se pudieron recuperar los datos de la demostración.');
     }
-
     setHasLoaded(true);
-  }, []);
+  }, [repository]);
 
   useEffect(() => {
-    if (!hasLoaded) {
-      return;
-    }
-
+    if (!hasLoaded || repository) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      setSaveWarning('');
     } catch {
-      setSaveWarning('Algunos archivos son grandes y no pudieron guardarse.');
+      // eslint-disable-next-line react/react-compiler -- Report a failure from the external storage write.
+      setSaveWarning(
+        'El navegador no pudo guardar los datos. Reduce los archivos adjuntos.',
+      );
     }
-  }, [hasLoaded, state]);
+  }, [hasLoaded, state, repository]);
+
+  const hasChanges =
+    repository !== null && collectChanges(original, state).length > 0;
+  useEffect(() => {
+    if (!hasChanges) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasChanges]);
+  const saveChanges = async () => {
+    if (!repository) return;
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      await repository.save(original, state);
+      const fresh = await repository.load();
+      setState(fresh.state);
+      setOriginal(fresh.state);
+      setSaveMessage('Cambios guardados en el programa.');
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo guardar. Tus cambios siguen en pantalla.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  const reload = async () => {
+    if (
+      !repository ||
+      (hasChanges &&
+        !window.confirm('Se descartarán los cambios sin guardar. ¿Continuar?'))
+    )
+      return;
+    setSaving(true);
+    try {
+      const fresh = await repository.load();
+      setState(fresh.state);
+      setOriginal(fresh.state);
+      setSaveMessage('Datos actualizados.');
+    } catch {
+      setSaveMessage('No se pudieron actualizar los datos.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const { mentors, mentees, mentorships } = state;
-  const activeMentor = mentors.find((mentor) => mentor.id === activeMentorId) ?? mentors[0];
-  const activeMentee = mentees.find((mentee) => mentee.id === activeMenteeId) ?? mentees[0];
+  const activeMentor =
+    mentors.find((mentor) => mentor.id === activeMentorId) ?? mentors[0];
+  const activeMentee =
+    mentees.find((mentee) => mentee.id === activeMenteeId) ?? mentees[0];
 
   const visibleMentorships = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -491,10 +497,21 @@ export default function Home() {
     statusFilter,
   ]);
 
-  const metrics = useMemo(() => getMetrics(state), [state]);
+  const scopedState = scopeState(
+    state,
+    role,
+    activeMentor?.id,
+    activeMentee?.id,
+  );
+  const metrics = getMetrics(scopedState);
   const navigation = getNavigation(role);
 
   const updateMentor = (mentorId: string, patch: Partial<Mentor>) => {
+    if (
+      role !== 'Administrador' &&
+      (role !== 'Mentor' || mentorId !== activeMentor?.id)
+    )
+      return;
     setState((current) => ({
       ...current,
       mentors: current.mentors.map((mentor) =>
@@ -504,6 +521,11 @@ export default function Home() {
   };
 
   const updateMentee = (menteeId: string, patch: Partial<Mentee>) => {
+    if (
+      role !== 'Administrador' &&
+      (role !== 'Mentoreado' || menteeId !== activeMentee?.id)
+    )
+      return;
     setState((current) => ({
       ...current,
       mentees: current.mentees.map((mentee) =>
@@ -516,6 +538,25 @@ export default function Home() {
     mentorshipId: string,
     patch: Partial<Mentorship>,
   ) => {
+    const target = mentorships.find((m) => m.id === mentorshipId);
+    if (
+      !target ||
+      role === 'Mentoreado' ||
+      (role === 'Mentor' && target.mentorId !== activeMentor?.id)
+    )
+      return;
+    if (
+      role !== 'Administrador' &&
+      [
+        'mentorId',
+        'menteeId',
+        'paidAt',
+        'formalization',
+        'planningSir',
+        'executionSir',
+      ].some((k) => k in patch)
+    )
+      return;
     setState((current) => ({
       ...current,
       mentorships: current.mentorships.map((mentorship) =>
@@ -531,6 +572,14 @@ export default function Home() {
     sessionNumber: number,
     patch: Partial<SessionRecord>,
   ) => {
+    const target = mentorships.find((m) => m.id === mentorshipId);
+    if (
+      !target ||
+      target.status !== 'En proceso' ||
+      role === 'Mentoreado' ||
+      (role === 'Mentor' && target.mentorId !== activeMentor?.id)
+    )
+      return;
     setState((current) => ({
       ...current,
       mentorships: current.mentorships.map((mentorship) =>
@@ -549,6 +598,7 @@ export default function Home() {
   };
 
   const handleRoleChange = (nextRole: Role) => {
+    if (repository) return;
     setRole(nextRole);
     setActiveView(defaultViewForRole(nextRole));
     setSearch('');
@@ -556,6 +606,7 @@ export default function Home() {
   };
 
   const addMentor = () => {
+    if (role !== 'Administrador') return;
     const name = newMentor.name.trim();
 
     if (!name) {
@@ -563,7 +614,7 @@ export default function Home() {
     }
 
     const mentor: Mentor = {
-      id: makeId('mentor'),
+      id: crypto.randomUUID(),
       name,
       title: newMentor.title.trim() || 'Mentor/a',
       email: '',
@@ -575,12 +626,18 @@ export default function Home() {
       bio: '',
     };
 
-    setState((current) => ({ ...current, mentors: [...current.mentors, mentor] }));
+    setState((current) => ({
+      ...current,
+      mentors: [...current.mentors, mentor],
+    }));
     setActiveMentorId(mentor.id);
+    if (!mentors.some((m) => m.id === newMentorship.mentorId))
+      setNewMentorship((current) => ({ ...current, mentorId: mentor.id }));
     setNewMentor({ name: '', title: '', expertise: '' });
   };
 
   const addMentee = () => {
+    if (role !== 'Administrador') return;
     const name = newMentee.name.trim();
 
     if (!name) {
@@ -588,7 +645,7 @@ export default function Home() {
     }
 
     const mentee: Mentee = {
-      id: makeId('mentee'),
+      id: crypto.randomUUID(),
       name,
       venture: newMentee.venture.trim(),
       stage: 'Por registrar',
@@ -597,18 +654,28 @@ export default function Home() {
       need: newMentee.need.trim(),
     };
 
-    setState((current) => ({ ...current, mentees: [...current.mentees, mentee] }));
+    setState((current) => ({
+      ...current,
+      mentees: [...current.mentees, mentee],
+    }));
     setActiveMenteeId(mentee.id);
+    if (!mentees.some((m) => m.id === newMentorship.menteeId))
+      setNewMentorship((current) => ({ ...current, menteeId: mentee.id }));
     setNewMentee({ name: '', venture: '', need: '' });
   };
 
   const addMentorship = () => {
-    if (!newMentorship.mentorId || !newMentorship.menteeId) {
+    if (role !== 'Administrador') return;
+    if (
+      !mentors.some((m) => m.id === newMentorship.mentorId) ||
+      !mentees.some((m) => m.id === newMentorship.menteeId)
+    ) {
+      setSaveWarning('Selecciona un mentor y un mentoreado registrados.');
       return;
     }
 
     const mentorship: Mentorship = {
-      id: makeId('mentoria'),
+      id: crypto.randomUUID(),
       sourceNumber:
         Math.max(0, ...mentorships.map((item) => item.sourceNumber)) + 1,
       mentorId: newMentorship.mentorId,
@@ -623,7 +690,7 @@ export default function Home() {
       executionSir: 'Pendiente',
       paidAt: '',
       goal: '',
-      sessions: createSessions(),
+      sessions: repository ? [] : createSessions(),
     };
 
     setState((current) => ({
@@ -633,54 +700,58 @@ export default function Home() {
     setActiveView('mentorships');
   };
 
-  const handleMentorPhoto = async (
-    mentorId: string,
+  const upload = async (
     event: ChangeEvent<HTMLInputElement>,
+    kind: 'photo' | 'document',
+    prefix: string,
+    commit: (attachment: Attachment) => void,
   ) => {
-    const file = event.currentTarget.files?.[0];
-
-    if (!file) {
-      return;
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    setSaveWarning('');
+    try {
+      await validateFile(file, kind);
+      const attachment = repository
+        ? await repository.upload(file, kind, prefix)
+        : await readFile(file);
+      commit(attachment);
+    } catch (error) {
+      setSaveWarning(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo cargar el archivo. Guarda primero el registro y vuelve a intentar.',
+      );
+    } finally {
+      input.value = '';
     }
-
-    const attachment = await readFile(file);
-    updateMentor(mentorId, { photo: attachment.dataUrl });
-    event.currentTarget.value = '';
   };
-
-  const handleMenteePhoto = async (
-    menteeId: string,
+  const handleMentorPhoto = (
+    id: string,
     event: ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.currentTarget.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    const attachment = await readFile(file);
-    updateMentee(menteeId, { photo: attachment.dataUrl });
-    event.currentTarget.value = '';
-  };
-
-  const handleSessionAttachment = async (
-    mentorshipId: string,
-    sessionNumber: number,
+  ) =>
+    upload(event, 'photo', `mentors/${id}`, (a) =>
+      updateMentor(id, { photo: a.dataUrl, photoPath: a.path }),
+    );
+  const handleMenteePhoto = (
+    id: string,
+    event: ChangeEvent<HTMLInputElement>,
+  ) =>
+    upload(event, 'photo', `mentees/${id}`, (a) =>
+      updateMentee(id, { photo: a.dataUrl, photoPath: a.path }),
+    );
+  const handleSessionAttachment = (
+    id: string,
+    number: number,
     event: ChangeEvent<HTMLInputElement>,
     field: 'photo' | 'document',
-  ) => {
-    const file = event.currentTarget.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    const attachment = await readFile(file);
-    updateSession(mentorshipId, sessionNumber, { [field]: attachment });
-    event.currentTarget.value = '';
-  };
+  ) =>
+    upload(event, field, `sessions/${id}/${number}`, (a) =>
+      updateSession(id, number, { [field]: a }),
+    );
 
   const resetDemo = () => {
+    if (repository) return;
     const shouldReset = window.confirm(
       'Se restaurarán los datos iniciales del monitoreo.',
     );
@@ -695,10 +766,26 @@ export default function Home() {
   };
 
   const exportExcel = async () => {
+    if (role === 'Mentoreado') return;
+    if (
+      !['summary', 'mentors', 'mentees', 'mentorships', 'sessions'].some(
+        (key) => exportOptions[key as keyof ExportOptions],
+      )
+    ) {
+      setExportMessage('Selecciona al menos una sección para exportar.');
+      return;
+    }
+    if (hasChanges) {
+      setExportMessage('Guarda los cambios antes de exportar.');
+      return;
+    }
     setIsExporting(true);
     setExportMessage('');
 
     try {
+      const exportState = repository
+        ? (await repository.load()).state
+        : scopedState;
       const ExcelJS = await import('exceljs');
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'Crea Empresa';
@@ -712,27 +799,32 @@ export default function Home() {
         : undefined;
 
       if (exportOptions.summary) {
-        addSummarySheet(workbook, logoId, state);
+        addSummarySheet(workbook, logoId, exportState);
       }
 
       if (exportOptions.mentors) {
-        addMentorsSheet(workbook, logoId, state);
+        addMentorsSheet(workbook, logoId, exportState);
       }
 
       if (exportOptions.mentees) {
-        addMenteesSheet(workbook, logoId, state);
+        addMenteesSheet(workbook, logoId, exportState);
       }
 
       if (exportOptions.mentorships) {
-        addMentorshipsSheet(workbook, logoId, state);
+        addMentorshipsSheet(workbook, logoId, exportState);
       }
 
       if (exportOptions.sessions) {
-        addSessionsSheet(workbook, logoId, state, exportOptions.attachments);
+        addSessionsSheet(
+          workbook,
+          logoId,
+          exportState,
+          exportOptions.attachments,
+        );
       }
 
       if (workbook.worksheets.length === 0) {
-        addSummarySheet(workbook, logoId, state);
+        addSummarySheet(workbook, logoId, exportState);
       }
 
       const buffer = await workbook.xlsx.writeBuffer();
@@ -752,209 +844,277 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#f5f9f6_0%,#eef6f3_42%,#f8fafc_100%)] text-foreground">
-      <header className="sticky top-0 z-30 border-b border-emerald-950/10 bg-white/92 backdrop-blur">
-        <div className="mx-auto flex max-w-[1500px] flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="grid size-12 place-items-center rounded-lg border border-red-100 bg-white shadow-sm">
-              <img
-                src={LOGO_PATH}
-                alt="INACAP"
-                className="h-9 w-auto object-contain"
-              />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-primary">Crea Empresa</p>
-              <h1 className="text-xl font-semibold sm:text-2xl">
-                Gestión de mentorías 2026
-              </h1>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <NativeSelect
-              value={role}
-              onChange={(event) => handleRoleChange(event.target.value as Role)}
-              aria-label="Rol activo"
-              className="w-44"
-            >
-              {ROLES.map((item) => (
-                <NativeSelectOption key={item} value={item}>
-                  {item}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-
-            {role === 'Mentor' && activeMentor ? (
-              <NativeSelect
-                value={activeMentor.id}
-                onChange={(event) => setActiveMentorId(event.target.value)}
-                aria-label="Mentor activo"
-                className="w-56"
-              >
-                {mentors.map((mentor) => (
-                  <NativeSelectOption key={mentor.id} value={mentor.id}>
-                    {mentor.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            ) : null}
-
-            {role === 'Mentoreado' && activeMentee ? (
-              <NativeSelect
-                value={activeMentee.id}
-                onChange={(event) => setActiveMenteeId(event.target.value)}
-                aria-label="Mentoreado activo"
-                className="w-56"
-              >
-                {mentees.map((mentee) => (
-                  <NativeSelectOption key={mentee.id} value={mentee.id}>
-                    {mentee.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            ) : null}
-
-            <Button type="button" variant="outline" onClick={resetDemo}>
-              Restaurar
-            </Button>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3 text-sm">
+        <div aria-live="polite">
+          <strong>
+            {repository
+              ? 'Cuenta del programa'
+              : 'Demostración · datos de este navegador'}
+          </strong>
+          <span className="ml-3">
+            {saving
+              ? 'Guardando…'
+              : hasChanges
+                ? 'Cambios sin guardar'
+                : saveMessage}
+          </span>
         </div>
-      </header>
-
-      <div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[248px_minmax(0,1fr)] lg:px-8">
-        <aside className="rounded-lg border border-emerald-950/10 bg-white p-3 shadow-sm lg:sticky lg:top-24 lg:self-start">
-          <nav className="grid gap-1" aria-label="Secciones">
-            {navigation.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setActiveView(item.id)}
-                aria-current={activeView === item.id ? 'page' : undefined}
-                className={cn(
-                  'flex h-10 items-center gap-2 rounded-lg px-3 text-left text-sm font-medium transition-colors',
-                  activeView === item.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
+        <div className="flex gap-2">
+          {repository && (
+            <>
+              <Button
+                onClick={() => void saveChanges()}
+                disabled={saving || !hasChanges}
               >
-                <span className="[&_svg]:size-4">{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
-          <div className="mt-4 rounded-lg bg-[#0f322e] p-3 text-white">
-            <p className="text-xs font-semibold uppercase text-emerald-100">
-              Estado general
-            </p>
-            <div className="mt-3 flex items-end gap-2">
-              <span className="text-3xl font-semibold">
-                {metrics.completionRate}%
-              </span>
-              <span className="pb-1 text-sm text-emerald-100">
-                cierre
-              </span>
+                Guardar cambios
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void reload()}
+                disabled={saving}
+              >
+                Actualizar
+              </Button>
+            </>
+          )}
+          <Button
+            variant="outline"
+            disabled={saving}
+            onClick={() => {
+              if (
+                !hasChanges ||
+                window.confirm('Hay cambios sin guardar. ¿Salir?')
+              )
+                exit();
+            }}
+          >
+            Salir
+          </Button>
+        </div>
+      </div>
+      {saveMessage && (
+        <output className="block border-b bg-amber-50 px-5 py-2 text-sm">
+          {saveMessage}
+        </output>
+      )}
+      <fieldset disabled={saving} className="min-w-0 border-0 p-0">
+        <header className="sticky top-0 z-30 border-b border-emerald-950/10 bg-white/92 backdrop-blur">
+          <div className="mx-auto flex max-w-[1500px] flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+            <div className="flex items-center gap-3">
+              <div className="grid size-12 place-items-center rounded-lg border border-red-100 bg-white shadow-sm">
+                <Image
+                  unoptimized
+                  width={96}
+                  height={96}
+                  src={LOGO_PATH}
+                  alt="INACAP"
+                  className="h-9 w-auto object-contain"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-primary">
+                  Crea Empresa
+                </p>
+                <h1 className="text-xl font-semibold sm:text-2xl">
+                  Gestión de mentorías 2026
+                </h1>
+              </div>
             </div>
-            <div className="mt-3 h-2 rounded-full bg-white/15">
-              <div
-                className="h-full rounded-full bg-[#f4c542]"
-                style={{ width: `${metrics.completionRate}%` }}
-              />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <NativeSelect
+                value={role}
+                onChange={(event) =>
+                  handleRoleChange(event.target.value as Role)
+                }
+                aria-label="Rol activo"
+                disabled={repository !== null}
+                className="w-44"
+              >
+                {ROLES.map((item) => (
+                  <NativeSelectOption key={item} value={item}>
+                    {item}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+
+              {!repository && role === 'Mentor' && activeMentor ? (
+                <NativeSelect
+                  value={activeMentor.id}
+                  onChange={(event) => setActiveMentorId(event.target.value)}
+                  aria-label="Mentor activo"
+                  className="w-56"
+                >
+                  {mentors.map((mentor) => (
+                    <NativeSelectOption key={mentor.id} value={mentor.id}>
+                      {mentor.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              ) : null}
+
+              {!repository && role === 'Mentoreado' && activeMentee ? (
+                <NativeSelect
+                  value={activeMentee.id}
+                  onChange={(event) => setActiveMenteeId(event.target.value)}
+                  aria-label="Mentoreado activo"
+                  className="w-56"
+                >
+                  {mentees.map((mentee) => (
+                    <NativeSelectOption key={mentee.id} value={mentee.id}>
+                      {mentee.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              ) : null}
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={resetDemo}
+                disabled={repository !== null}
+              >
+                Restaurar
+              </Button>
             </div>
           </div>
+        </header>
 
-          {saveWarning ? (
-            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-              {saveWarning}
-            </p>
-          ) : null}
-        </aside>
+        <div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[248px_minmax(0,1fr)] lg:px-8">
+          <aside className="rounded-lg border border-emerald-950/10 bg-white p-3 shadow-sm lg:sticky lg:top-24 lg:self-start">
+            <nav className="grid gap-1" aria-label="Secciones">
+              {navigation.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveView(item.id)}
+                  aria-current={activeView === item.id ? 'page' : undefined}
+                  className={cn(
+                    'flex h-10 items-center gap-2 rounded-lg px-3 text-left text-sm font-medium transition-colors',
+                    activeView === item.id
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  <span className="[&_svg]:size-4">{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
+            </nav>
 
-        <section className="min-w-0">
-          {activeView === 'dashboard' ? (
-            <DashboardView
-              metrics={metrics}
-              state={state}
-              newMentorship={newMentorship}
-              setNewMentorship={setNewMentorship}
-              addMentorship={addMentorship}
-            />
-          ) : null}
+            <div className="mt-4 rounded-lg bg-[#0f322e] p-3 text-white">
+              <p className="text-xs font-semibold uppercase text-emerald-100">
+                Estado general
+              </p>
+              <div className="mt-3 flex items-end gap-2">
+                <span className="text-3xl font-semibold">
+                  {metrics.completionRate}%
+                </span>
+                <span className="pb-1 text-sm text-emerald-100">cierre</span>
+              </div>
+              <div className="mt-3 h-2 rounded-full bg-white/15">
+                <div
+                  className="h-full rounded-full bg-[#f4c542]"
+                  style={{ width: `${metrics.completionRate}%` }}
+                />
+              </div>
+            </div>
 
-          {activeView === 'mentors' ? (
-            <MentorsView
-              mentors={mentors}
-              mentorships={mentorships}
-              newMentor={newMentor}
-              setNewMentor={setNewMentor}
-              addMentor={addMentor}
-              updateMentor={updateMentor}
-              handleMentorPhoto={handleMentorPhoto}
-            />
-          ) : null}
+            {saveWarning ? (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                {saveWarning}
+              </p>
+            ) : null}
+          </aside>
 
-          {activeView === 'mentees' ? (
-            <MenteesView
-              mentees={mentees}
-              mentorships={mentorships}
-              newMentee={newMentee}
-              setNewMentee={setNewMentee}
-              addMentee={addMentee}
-              updateMentee={updateMentee}
-              handleMenteePhoto={handleMenteePhoto}
-            />
-          ) : null}
+          <section className="min-w-0">
+            {activeView === 'dashboard' ? (
+              <DashboardView
+                metrics={metrics}
+                state={state}
+                newMentorship={newMentorship}
+                setNewMentorship={setNewMentorship}
+                addMentorship={addMentorship}
+              />
+            ) : null}
 
-          {activeView === 'profile' && role === 'Mentor' && activeMentor ? (
-            <MentorProfileView
-              mentor={activeMentor}
-              mentorships={mentorships}
-              mentees={mentees}
-              updateMentor={updateMentor}
-              handleMentorPhoto={handleMentorPhoto}
-            />
-          ) : null}
+            {activeView === 'mentors' ? (
+              <MentorsView
+                mentors={mentors}
+                mentorships={mentorships}
+                newMentor={newMentor}
+                setNewMentor={setNewMentor}
+                addMentor={addMentor}
+                updateMentor={updateMentor}
+                handleMentorPhoto={handleMentorPhoto}
+              />
+            ) : null}
 
-          {activeView === 'profile' && role === 'Mentoreado' && activeMentee ? (
-            <MenteeProfileView
-              mentee={activeMentee}
-              mentorships={mentorships}
-              mentors={mentors}
-              updateMentee={updateMentee}
-              handleMenteePhoto={handleMenteePhoto}
-            />
-          ) : null}
+            {activeView === 'mentees' ? (
+              <MenteesView
+                mentees={mentees}
+                mentorships={mentorships}
+                newMentee={newMentee}
+                setNewMentee={setNewMentee}
+                addMentee={addMentee}
+                updateMentee={updateMentee}
+                handleMenteePhoto={handleMenteePhoto}
+              />
+            ) : null}
 
-          {activeView === 'mentorships' ? (
-            <MentorshipsView
-              role={role}
-              search={search}
-              setSearch={setSearch}
-              statusFilter={statusFilter}
-              setStatusFilter={setStatusFilter}
-              mentorships={visibleMentorships}
-              mentors={mentors}
-              mentees={mentees}
-              updateMentorship={updateMentorship}
-              updateSession={updateSession}
-              handleSessionAttachment={handleSessionAttachment}
-            />
-          ) : null}
+            {activeView === 'profile' && role === 'Mentor' && activeMentor ? (
+              <MentorProfileView
+                mentor={activeMentor}
+                mentorships={mentorships}
+                mentees={mentees}
+                updateMentor={updateMentor}
+                handleMentorPhoto={handleMentorPhoto}
+              />
+            ) : null}
 
-          {activeView === 'export' ? (
-            <ExportView
-              metrics={metrics}
-              exportOptions={exportOptions}
-              setExportOptions={setExportOptions}
-              fileName={fileName}
-              setFileName={setFileName}
-              isExporting={isExporting}
-              exportMessage={exportMessage}
-              exportExcel={exportExcel}
-            />
-          ) : null}
-        </section>
-      </div>
+            {activeView === 'profile' &&
+            role === 'Mentoreado' &&
+            activeMentee ? (
+              <MenteeProfileView
+                mentee={activeMentee}
+                mentorships={mentorships}
+                mentors={mentors}
+                updateMentee={updateMentee}
+                handleMenteePhoto={handleMenteePhoto}
+              />
+            ) : null}
+
+            {activeView === 'mentorships' ? (
+              <MentorshipsView
+                role={role}
+                search={search}
+                setSearch={setSearch}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                mentorships={visibleMentorships}
+                mentors={mentors}
+                mentees={mentees}
+                updateMentorship={updateMentorship}
+                updateSession={updateSession}
+                handleSessionAttachment={handleSessionAttachment}
+              />
+            ) : null}
+
+            {activeView === 'export' ? (
+              <ExportView
+                metrics={metrics}
+                exportOptions={exportOptions}
+                setExportOptions={setExportOptions}
+                fileName={fileName}
+                setFileName={setFileName}
+                isExporting={isExporting}
+                exportMessage={exportMessage}
+                exportExcel={exportExcel}
+              />
+            ) : null}
+          </section>
+        </div>
+      </fieldset>
     </main>
   );
 }
@@ -1026,7 +1186,10 @@ function DashboardView({
                 Vista general por estado, servicio y avance de sesiones.
               </p>
             </div>
-            <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+            <Badge
+              variant="outline"
+              className="border-red-200 bg-red-50 text-red-700"
+            >
               Admin
             </Badge>
           </div>
@@ -1036,7 +1199,9 @@ function DashboardView({
               title="Estados"
               items={MENTORSHIP_STATUSES.map((status) => ({
                 label: status,
-                count: state.mentorships.filter((item) => item.status === status).length,
+                count: state.mentorships.filter(
+                  (item) => item.status === status,
+                ).length,
                 tone: statusTones[status],
               }))}
               total={Math.max(1, state.mentorships.length)}
@@ -1045,7 +1210,9 @@ function DashboardView({
               title="Servicios"
               items={SERVICES.map((service) => ({
                 label: service,
-                count: state.mentorships.filter((item) => item.service === service).length,
+                count: state.mentorships.filter(
+                  (item) => item.service === service,
+                ).length,
                 tone: 'border-teal-200 bg-teal-50 text-teal-700',
               }))}
               total={Math.max(1, state.mentorships.length)}
@@ -1156,12 +1323,19 @@ function DashboardView({
               <CompactMentorshipCard
                 key={mentorship.id}
                 mentorship={mentorship}
-                mentor={state.mentors.find((mentor) => mentor.id === mentorship.mentorId)}
-                mentee={state.mentees.find((mentee) => mentee.id === mentorship.menteeId)}
+                mentor={state.mentors.find(
+                  (mentor) => mentor.id === mentorship.mentorId,
+                )}
+                mentee={state.mentees.find(
+                  (mentee) => mentee.id === mentorship.menteeId,
+                )}
               />
             ))
           ) : (
-            <EmptyState title="Sin alertas" body="Todas las mentorías están avanzando sin estados críticos." />
+            <EmptyState
+              title="Sin alertas"
+              body="Todas las mentorías están avanzando sin estados críticos."
+            />
           )}
         </div>
       </section>
@@ -1181,7 +1355,11 @@ function MentorsView({
   mentors: Mentor[];
   mentorships: Mentorship[];
   newMentor: { name: string; title: string; expertise: string };
-  setNewMentor: (value: { name: string; title: string; expertise: string }) => void;
+  setNewMentor: (value: {
+    name: string;
+    title: string;
+    expertise: string;
+  }) => void;
   addMentor: () => void;
   updateMentor: (mentorId: string, patch: Partial<Mentor>) => void;
   handleMentorPhoto: (
@@ -1260,7 +1438,11 @@ function MenteesView({
   mentees: Mentee[];
   mentorships: Mentorship[];
   newMentee: { name: string; venture: string; need: string };
-  setNewMentee: (value: { name: string; venture: string; need: string }) => void;
+  setNewMentee: (value: {
+    name: string;
+    venture: string;
+    need: string;
+  }) => void;
   addMentee: () => void;
   updateMentee: (menteeId: string, patch: Partial<Mentee>) => void;
   handleMenteePhoto: (
@@ -1343,7 +1525,9 @@ function MentorProfileView({
     event: ChangeEvent<HTMLInputElement>,
   ) => void;
 }) {
-  const myMentorships = mentorships.filter((item) => item.mentorId === mentor.id);
+  const myMentorships = mentorships.filter(
+    (item) => item.mentorId === mentor.id,
+  );
   const stats = getMentorStats(mentor.id, mentorships);
 
   return (
@@ -1389,7 +1573,9 @@ function MenteeProfileView({
     event: ChangeEvent<HTMLInputElement>,
   ) => void;
 }) {
-  const myMentorships = mentorships.filter((item) => item.menteeId === mentee.id);
+  const myMentorships = mentorships.filter(
+    (item) => item.menteeId === mentee.id,
+  );
 
   return (
     <div className="grid gap-5">
@@ -1464,12 +1650,13 @@ function MentorshipsView({
 
       <section className="rounded-lg border border-emerald-950/10 bg-white p-3 shadow-sm">
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
-          <label className="relative block">
+          <label htmlFor="mentorship-search" className="relative block">
             <Search
               className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
             />
             <Input
+              id="mentorship-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="pl-8"
@@ -1483,7 +1670,9 @@ function MentorshipsView({
             className="w-full"
             aria-label="Filtrar por estado"
           >
-            <NativeSelectOption value="Todos">Todos los estados</NativeSelectOption>
+            <NativeSelectOption value="Todos">
+              Todos los estados
+            </NativeSelectOption>
             {MENTORSHIP_STATUSES.map((status) => (
               <NativeSelectOption key={status} value={status}>
                 {status}
@@ -1504,13 +1693,17 @@ function MentorshipsView({
               mentors={mentors}
               mentees={mentees}
               canEdit={canEdit}
+              canManage={role === 'Administrador'}
               updateMentorship={updateMentorship}
               updateSession={updateSession}
               handleSessionAttachment={handleSessionAttachment}
             />
           ))
         ) : (
-          <EmptyState title="Sin resultados" body="No hay mentorías para los filtros seleccionados." />
+          <EmptyState
+            title="Sin resultados"
+            body="No hay mentorías para los filtros seleccionados."
+          />
         )}
       </section>
     </div>
@@ -1536,13 +1729,21 @@ function ExportView({
   exportMessage: string;
   exportExcel: () => void;
 }) {
-  const options: Array<{ key: keyof ExportOptions; label: string; detail: string }> = [
+  const options: Array<{
+    key: keyof ExportOptions;
+    label: string;
+    detail: string;
+  }> = [
     { key: 'summary', label: 'Resumen', detail: 'KPIs y avance general' },
     { key: 'mentors', label: 'Mentores', detail: 'Perfiles y especialidades' },
     { key: 'mentees', label: 'Mentoreados', detail: 'Fichas de participantes' },
     { key: 'mentorships', label: 'Mentorías', detail: 'Estado, horas y SIR' },
     { key: 'sessions', label: 'Sesiones', detail: 'Detalle sesión por sesión' },
-    { key: 'attachments', label: 'Evidencias', detail: 'Nombres de archivos adjuntos' },
+    {
+      key: 'attachments',
+      label: 'Evidencias',
+      detail: 'Nombres de archivos adjuntos',
+    },
   ];
 
   return (
@@ -1568,6 +1769,7 @@ function ExportView({
               {options.map((option) => (
                 <label
                   key={option.key}
+                  aria-label={option.label}
                   className="flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/35 p-3 transition-colors hover:bg-muted"
                 >
                   <input
@@ -1594,7 +1796,11 @@ function ExportView({
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" onClick={exportExcel} disabled={isExporting}>
+              <Button
+                type="button"
+                onClick={exportExcel}
+                disabled={isExporting}
+              >
                 <Download aria-hidden="true" />
                 {isExporting ? 'Generando...' : 'Descargar Excel'}
               </Button>
@@ -1609,7 +1815,14 @@ function ExportView({
 
         <div className="rounded-lg border border-emerald-950/10 bg-[#0f322e] p-4 text-white shadow-sm">
           <div className="mb-6 flex items-center justify-between">
-            <img src={LOGO_PATH} alt="INACAP" className="h-12 w-auto" />
+            <Image
+              unoptimized
+              width={96}
+              height={96}
+              src={LOGO_PATH}
+              alt="INACAP"
+              className="h-12 w-auto"
+            />
             <Badge className="bg-white text-[#0f322e]">XLSX</Badge>
           </div>
           <h2 className="text-xl font-semibold">Monitoreo de mentorías 2026</h2>
@@ -1617,7 +1830,10 @@ function ExportView({
             <ExcelPreviewMetric label="Mentorías" value={metrics.mentorships} />
             <ExcelPreviewMetric label="Mentores" value={metrics.mentors} />
             <ExcelPreviewMetric label="Mentoreados" value={metrics.mentees} />
-            <ExcelPreviewMetric label="Evidencias" value={metrics.evidenceCount} />
+            <ExcelPreviewMetric
+              label="Evidencias"
+              value={metrics.evidenceCount}
+            />
           </div>
         </div>
       </section>
@@ -1706,7 +1922,10 @@ function SummaryPanel({
           return (
             <div key={item.label} className="grid gap-1.5">
               <div className="flex items-center justify-between gap-3">
-                <Badge variant="outline" className={cn('max-w-[260px]', item.tone)}>
+                <Badge
+                  variant="outline"
+                  className={cn('max-w-[260px]', item.tone)}
+                >
                   <span className="truncate">{item.label}</span>
                 </Badge>
                 <span className="text-sm font-semibold tabular-nums">
@@ -1749,7 +1968,7 @@ function MentorCard({
           <UploadLabel icon={<Camera />} label="Foto">
             <input
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg"
               className="sr-only"
               onChange={(event) => handleMentorPhoto(mentor.id, event)}
             />
@@ -1849,7 +2068,7 @@ function MenteeCard({
           <UploadLabel icon={<Camera />} label="Foto">
             <input
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg"
               className="sr-only"
               onChange={(event) => handleMenteePhoto(mentee.id, event)}
             />
@@ -1929,6 +2148,7 @@ function MentorshipCard({
   mentors,
   mentees,
   canEdit,
+  canManage,
   updateMentorship,
   updateSession,
   handleSessionAttachment,
@@ -1939,6 +2159,7 @@ function MentorshipCard({
   mentors: Mentor[];
   mentees: Mentee[];
   canEdit: boolean;
+  canManage: boolean;
   updateMentorship: (mentorshipId: string, patch: Partial<Mentorship>) => void;
   updateSession: (
     mentorshipId: string,
@@ -1999,7 +2220,7 @@ function MentorshipCard({
             onChange={(event) =>
               updateMentorship(mentorship.id, { mentorId: event.target.value })
             }
-            disabled={!canEdit}
+            disabled={!canManage}
             className="w-full"
             aria-label="Mentor asignado"
           >
@@ -2016,7 +2237,7 @@ function MentorshipCard({
             onChange={(event) =>
               updateMentorship(mentorship.id, { menteeId: event.target.value })
             }
-            disabled={!canEdit}
+            disabled={!canManage}
             className="w-full"
             aria-label="Mentoreado asignado"
           >
@@ -2084,7 +2305,7 @@ function MentorshipCard({
         <FieldLabel label="Formalización">
           <CheckSelect
             value={mentorship.formalization}
-            disabled={!canEdit}
+            disabled={!canManage}
             onChange={(value) =>
               updateMentorship(mentorship.id, { formalization: value })
             }
@@ -2093,7 +2314,7 @@ function MentorshipCard({
         <FieldLabel label="Planificación SIR">
           <CheckSelect
             value={mentorship.planningSir}
-            disabled={!canEdit}
+            disabled={!canManage}
             onChange={(value) =>
               updateMentorship(mentorship.id, { planningSir: value })
             }
@@ -2102,7 +2323,7 @@ function MentorshipCard({
         <FieldLabel label="Ejecución SIR">
           <CheckSelect
             value={mentorship.executionSir}
-            disabled={!canEdit}
+            disabled={!canManage}
             onChange={(value) =>
               updateMentorship(mentorship.id, { executionSir: value })
             }
@@ -2124,7 +2345,7 @@ function MentorshipCard({
           <Input
             type="date"
             value={mentorship.paidAt}
-            disabled={!canEdit}
+            disabled={!canManage}
             onChange={(event) =>
               updateMentorship(mentorship.id, { paidAt: event.target.value })
             }
@@ -2141,13 +2362,18 @@ function MentorshipCard({
         </FieldLabel>
       </div>
 
+      {mentorship.sessions.length === 0 && (
+        <p className="mt-4 text-sm text-amber-800">
+          Guarda la mentoría para comenzar a registrar sus seis sesiones.
+        </p>
+      )}
       <div className="mt-5 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
         {mentorship.sessions.map((session) => (
           <SessionTile
             key={session.number}
             session={session}
             mentorshipId={mentorship.id}
-            canEdit={canEdit}
+            canEdit={canEdit && mentorship.status === 'En proceso'}
             updateSession={updateSession}
             handleSessionAttachment={handleSessionAttachment}
           />
@@ -2240,7 +2466,7 @@ function SessionTile({
         <UploadLabel icon={<Camera />} label="Foto" disabled={!canEdit}>
           <input
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg"
             className="sr-only"
             disabled={!canEdit}
             onChange={(event) =>
@@ -2256,6 +2482,7 @@ function SessionTile({
         <UploadLabel icon={<Upload />} label="Documento" disabled={!canEdit}>
           <input
             type="file"
+            accept="application/pdf"
             className="sr-only"
             disabled={!canEdit}
             onChange={(event) =>
@@ -2343,7 +2570,14 @@ function Avatar({
       )}
     >
       {photo ? (
-        <img src={photo} alt={name} className="h-full w-full object-cover" />
+        <Image
+          unoptimized
+          width={96}
+          height={96}
+          src={photo}
+          alt={name}
+          className="h-full w-full object-cover"
+        />
       ) : (
         initials(name)
       )}
@@ -2362,13 +2596,19 @@ function PersonLine({
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <Avatar name={person?.name ?? fallback} photo={person?.photo} size={small ? 'sm' : 'md'} />
+      <Avatar
+        name={person?.name ?? fallback}
+        photo={person?.photo}
+        size={small ? 'sm' : 'md'}
+      />
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold">
           {person?.name ?? fallback}
         </p>
         <p className="truncate text-xs text-muted-foreground">
-          {'title' in (person ?? {}) ? (person as Mentor).title : (person as Mentee | undefined)?.venture || 'Sin emprendimiento'}
+          {'title' in (person ?? {})
+            ? (person as Mentor).title
+            : (person as Mentee | undefined)?.venture || 'Sin emprendimiento'}
         </p>
       </div>
     </div>
@@ -2469,7 +2709,13 @@ function EmptyState({ title, body }: { title: string; body: string }) {
   );
 }
 
-function ExcelPreviewMetric({ label, value }: { label: string; value: number }) {
+function ExcelPreviewMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
   return (
     <div className="rounded-lg bg-white/10 p-3">
       <p className="text-xs font-semibold uppercase text-emerald-100">
@@ -2478,379 +2724,4 @@ function ExcelPreviewMetric({ label, value }: { label: string; value: number }) 
       <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
     </div>
   );
-}
-
-function getMetrics(state: AppState) {
-  const sessions = state.mentorships.flatMap((mentorship) => mentorship.sessions);
-  const finished = state.mentorships.filter(
-    (mentorship) => mentorship.status === 'Terminada',
-  ).length;
-
-  return {
-    mentors: state.mentors.length,
-    mentees: state.mentees.length,
-    mentorships: state.mentorships.length,
-    activeMentorships: state.mentorships.filter((mentorship) =>
-      ['En proceso', 'Derivada', 'Esperando derivación'].includes(
-        mentorship.status,
-      ),
-    ).length,
-    finished,
-    hours: state.mentorships.reduce((sum, mentorship) => sum + mentorship.hours, 0),
-    completedSessions: sessions.filter((session) => session.status === 'Realizada').length,
-    evidenceCount: sessions.reduce(
-      (sum, session) =>
-        sum + (session.photo ? 1 : 0) + (session.document ? 1 : 0),
-      0,
-    ),
-    completionRate:
-      state.mentorships.length === 0
-        ? 0
-        : Math.round((finished / state.mentorships.length) * 100),
-  };
-}
-
-function getMentorStats(mentorId: string, mentorships: Mentorship[]) {
-  const assigned = mentorships.filter((mentorship) => mentorship.mentorId === mentorId);
-
-  return {
-    total: assigned.length,
-    finished: assigned.filter((mentorship) => mentorship.status === 'Terminada').length,
-    hours: assigned.reduce((sum, mentorship) => sum + mentorship.hours, 0),
-  };
-}
-
-function getMenteeStats(menteeId: string, mentorships: Mentorship[]) {
-  const assigned = mentorships.filter((mentorship) => mentorship.menteeId === menteeId);
-
-  return {
-    total: assigned.length,
-    finished: assigned.filter((mentorship) => mentorship.status === 'Terminada').length,
-    completedSessions: assigned.reduce(
-      (sum, mentorship) =>
-        sum +
-        mentorship.sessions.filter((session) => session.status === 'Realizada').length,
-      0,
-    ),
-  };
-}
-
-async function imageToBase64(path: string) {
-  try {
-    const response = await fetch(path);
-    const blob = await response.blob();
-
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return '';
-  }
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function addWorkbookHeader(
-  worksheet: any,
-  logoId: number | undefined,
-  title: string,
-  subtitle: string,
-) {
-  worksheet.properties.defaultRowHeight = 22;
-  worksheet.pageSetup = {
-    orientation: 'landscape',
-    fitToPage: true,
-    fitToWidth: 1,
-    fitToHeight: 0,
-    margins: {
-      left: 0.35,
-      right: 0.35,
-      top: 0.45,
-      bottom: 0.45,
-      header: 0.2,
-      footer: 0.2,
-    },
-  };
-
-  worksheet.addRow([]);
-  worksheet.addRow([]);
-  worksheet.addRow([]);
-  worksheet.mergeCells('B1:H1');
-  worksheet.mergeCells('B2:H2');
-  worksheet.getCell('B1').value = title;
-  worksheet.getCell('B2').value = subtitle;
-  worksheet.getCell('B1').font = {
-    bold: true,
-    size: 18,
-    color: { argb: 'FF0F322E' },
-  };
-  worksheet.getCell('B2').font = {
-    size: 11,
-    color: { argb: 'FF667085' },
-  };
-  worksheet.getCell('B1').alignment = { vertical: 'middle' };
-  worksheet.getCell('B2').alignment = { vertical: 'middle' };
-
-  if (typeof logoId === 'number') {
-    worksheet.addImage(logoId, {
-      tl: { col: 0.15, row: 0.15 },
-      ext: { width: 42, height: 56 },
-    });
-  }
-}
-
-function addStyledTable(
-  worksheet: any,
-  headers: string[],
-  rows: Array<Array<string | number>>,
-  widths: number[],
-) {
-  worksheet.addRow([]);
-  const headerRow = worksheet.addRow(headers);
-  const headerRowNumber = headerRow.number;
-  worksheet.views = [{ state: 'frozen', ySplit: headerRowNumber }];
-  worksheet.autoFilter = {
-    from: { row: headerRowNumber, column: 1 },
-    to: { row: headerRowNumber, column: headers.length },
-  };
-
-  headers.forEach((_, index) => {
-    worksheet.getColumn(index + 1).width = widths[index] ?? 18;
-  });
-
-  headerRow.height = 26;
-  headerRow.eachCell((cell: any) => {
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF0F322E' },
-    };
-    cell.alignment = { vertical: 'middle', wrapText: true };
-    cell.border = excelBorder();
-  });
-
-  rows.forEach((row, index) => {
-    const dataRow = worksheet.addRow(row);
-    dataRow.height = 24;
-    dataRow.eachCell((cell: any) => {
-      cell.alignment = { vertical: 'middle', wrapText: true };
-      cell.border = excelBorder();
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: index % 2 === 0 ? 'FFFFFFFF' : 'FFF4F8F6' },
-      };
-    });
-  });
-}
-
-function excelBorder() {
-  return {
-    top: { style: 'thin', color: { argb: 'FFDDE5E1' } },
-    left: { style: 'thin', color: { argb: 'FFDDE5E1' } },
-    bottom: { style: 'thin', color: { argb: 'FFDDE5E1' } },
-    right: { style: 'thin', color: { argb: 'FFDDE5E1' } },
-  };
-}
-
-function addSummarySheet(workbook: any, logoId: number | undefined, state: AppState) {
-  const metrics = getMetrics(state);
-  const worksheet = workbook.addWorksheet('Resumen');
-  addWorkbookHeader(
-    worksheet,
-    logoId,
-    'Monitoreo de mentorías 2026',
-    'Resumen general Crea Empresa',
-  );
-  addStyledTable(
-    worksheet,
-    ['Indicador', 'Valor'],
-    [
-      ['Mentores', metrics.mentors],
-      ['Mentoreados', metrics.mentees],
-      ['Mentorías', metrics.mentorships],
-      ['Mentorías activas', metrics.activeMentorships],
-      ['Mentorías terminadas', metrics.finished],
-      ['Horas registradas', metrics.hours],
-      ['Sesiones realizadas', metrics.completedSessions],
-      ['Evidencias adjuntas', metrics.evidenceCount],
-      ['Cierre general', `${metrics.completionRate}%`],
-    ],
-    [32, 18],
-  );
-
-  worksheet.addRow([]);
-  addStyledTable(
-    worksheet,
-    ['Estado', 'Cantidad'],
-    MENTORSHIP_STATUSES.map((status) => [
-      status,
-      state.mentorships.filter((mentorship) => mentorship.status === status).length,
-    ]),
-    [32, 18],
-  );
-}
-
-function addMentorsSheet(workbook: any, logoId: number | undefined, state: AppState) {
-  const worksheet = workbook.addWorksheet('Mentores');
-  addWorkbookHeader(worksheet, logoId, 'Mentores', 'Perfiles y carga asignada');
-  addStyledTable(
-    worksheet,
-    ['Nombre', 'Perfil', 'Correo', 'Teléfono', 'Especialidades', 'Mentorías', 'Terminadas', 'Horas'],
-    state.mentors.map((mentor) => {
-      const stats = getMentorStats(mentor.id, state.mentorships);
-
-      return [
-        mentor.name,
-        mentor.title,
-        mentor.email,
-        mentor.phone,
-        mentor.expertise.join(', '),
-        stats.total,
-        stats.finished,
-        stats.hours,
-      ];
-    }),
-    [28, 22, 28, 18, 42, 14, 14, 12],
-  );
-}
-
-function addMenteesSheet(workbook: any, logoId: number | undefined, state: AppState) {
-  const worksheet = workbook.addWorksheet('Mentoreados');
-  addWorkbookHeader(
-    worksheet,
-    logoId,
-    'Mentoreados',
-    'Fichas de participantes y emprendimientos',
-  );
-  addStyledTable(
-    worksheet,
-    ['Nombre', 'Emprendimiento', 'Etapa', 'Correo', 'Teléfono', 'Necesidad', 'Mentorías', 'Sesiones realizadas'],
-    state.mentees.map((mentee) => {
-      const stats = getMenteeStats(mentee.id, state.mentorships);
-
-      return [
-        mentee.name,
-        mentee.venture,
-        mentee.stage,
-        mentee.email,
-        mentee.phone,
-        mentee.need,
-        stats.total,
-        stats.completedSessions,
-      ];
-    }),
-    [28, 28, 20, 28, 18, 46, 14, 18],
-  );
-}
-
-function addMentorshipsSheet(
-  workbook: any,
-  logoId: number | undefined,
-  state: AppState,
-) {
-  const worksheet = workbook.addWorksheet('Mentorias');
-  addWorkbookHeader(
-    worksheet,
-    logoId,
-    'Mentorías',
-    'Seguimiento operativo por mentoría',
-  );
-  addStyledTable(
-    worksheet,
-    [
-      'N°',
-      'Mentor',
-      'Mentoreado',
-      'Mes',
-      'Horas',
-      'Espacio',
-      'Estado',
-      'Servicio',
-      'Formalización',
-      'Planificación SIR',
-      'Ejecución SIR',
-      'Pagada en',
-      'Sesiones realizadas',
-      'Objetivo',
-    ],
-    state.mentorships.map((mentorship) => {
-      const mentor = state.mentors.find((item) => item.id === mentorship.mentorId);
-      const mentee = state.mentees.find((item) => item.id === mentorship.menteeId);
-
-      return [
-        mentorship.sourceNumber,
-        mentor?.name ?? '',
-        mentee?.name ?? '',
-        mentorship.month,
-        mentorship.hours,
-        mentorship.space,
-        mentorship.status,
-        mentorship.service,
-        mentorship.formalization,
-        mentorship.planningSir,
-        mentorship.executionSir,
-        mentorship.paidAt,
-        mentorship.sessions.filter((session) => session.status === 'Realizada').length,
-        mentorship.goal,
-      ];
-    }),
-    [10, 28, 28, 16, 12, 22, 22, 36, 18, 20, 18, 16, 18, 44],
-  );
-}
-
-function addSessionsSheet(
-  workbook: any,
-  logoId: number | undefined,
-  state: AppState,
-  includeAttachments: boolean,
-) {
-  const worksheet = workbook.addWorksheet('Sesiones');
-  addWorkbookHeader(
-    worksheet,
-    logoId,
-    'Sesiones',
-    'Detalle de avances, acuerdos y evidencias',
-  );
-  const headers = [
-    'Mentoría',
-    'Mentor',
-    'Mentoreado',
-    'Sesión',
-    'Fecha',
-    'Estado',
-    'Resumen',
-    ...(includeAttachments ? ['Foto', 'Documento'] : []),
-  ];
-  const widths = [12, 28, 28, 12, 16, 18, 54, 28, 30];
-  const rows = state.mentorships.flatMap((mentorship) => {
-    const mentor = state.mentors.find((item) => item.id === mentorship.mentorId);
-    const mentee = state.mentees.find((item) => item.id === mentorship.menteeId);
-
-    return mentorship.sessions.map((session) => [
-      mentorship.sourceNumber,
-      mentor?.name ?? '',
-      mentee?.name ?? '',
-      session.number,
-      session.date,
-      session.status,
-      session.summary,
-      ...(includeAttachments
-        ? [session.photo?.name ?? '', session.document?.name ?? '']
-        : []),
-    ]);
-  });
-
-  addStyledTable(worksheet, headers, rows, widths);
 }
