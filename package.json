@@ -10,6 +10,9 @@
     "test": "node --test evaluacion2/implementacion/tests/architecture.test.mjs tests/*.test.mjs",
     "dev": "vinext dev",
     "build": "vinext build",
+    "dev:netlify": "vite --config vite.netlify.config.ts",
+    "build:netlify": "vite build --config vite.netlify.config.ts",
+    "preview:netlify": "vite preview --config vite.netlify.config.ts",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt"

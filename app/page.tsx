@@ -1935,7 +1935,7 @@ function SummaryPanel({
   total: number;
 }) {
   return (
-    <div className="rounded-lg border border-border p-3">
+    <div className="min-w-0 rounded-lg border border-border p-3">
       <h3 className="mb-3 text-sm font-semibold">{title}</h3>
       <div className="grid gap-3">
         {items.map((item) => {
@@ -1946,11 +1946,12 @@ function SummaryPanel({
               <div className="flex items-center justify-between gap-3">
                 <Badge
                   variant="outline"
-                  className={cn('max-w-[260px]', item.tone)}
+                  className={cn('min-w-0 max-w-full shrink', item.tone)}
+                  title={item.label}
                 >
                   <span className="truncate">{item.label}</span>
                 </Badge>
-                <span className="text-sm font-semibold tabular-nums">
+                <span className="shrink-0 text-sm font-semibold tabular-nums">
                   {item.count}
                 </span>
               </div>

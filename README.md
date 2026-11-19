@@ -1,8 +1,32 @@
 # Crea Empresa — gestión de mentorías
 
-Aplicación académica con React, TypeScript y Vinext/Vite. La interfaz conserva el diseño del proyecto y utiliza Supabase Auth, PostgreSQL y Storage cuando la conexión está configurada. La demostración funciona de forma separada en el navegador; cambiar su selector de rol no concede acceso a la base real.
+Aplicación académica con React y TypeScript, compilación Vite para Netlify y compatibilidad con la versión anterior Vinext/Sites. La interfaz conserva el diseño del proyecto y utiliza Supabase Auth, PostgreSQL y Storage cuando la conexión está configurada. La demostración funciona de forma separada en el navegador; cambiar su selector de rol no concede acceso a la base real.
 
-## Ejecutar
+
+## Netlify con Supabase
+
+Sitio publicado: https://creaempresa-mentorias-inacap.netlify.app/
+
+Proyecto Netlify: `06296a1c-3001-49fd-b5ac-ff6eeef3d0e8`. Primera publicación: `6afe6bce382d19521eca82a4`, 19 de noviembre de 2026.
+
+El destino Netlify compila la misma interfaz React/TypeScript como una aplicación estática de Vite. Supabase sigue siendo el backend: Auth, PostgreSQL/RPC/RLS y Storage privado. No depende de un Worker de Cloudflare ni del acceso de ChatGPT. Los comandos originales de Vinext se conservan para la versión anterior en Sites.
+
+```sh
+npm ci
+npm run dev:netlify
+npm run build:netlify
+npm run preview:netlify
+```
+
+Para desarrollo y build, copiar `.env.example` a `.env.local` y completar únicamente `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`. También pueden definirse como variables del proceso o del entorno de build de Netlify. La compilación falla si faltan valores válidos. El servidor de desarrollo usa el puerto 3001 y la vista previa el 4173.
+
+`netlify.toml` define `npm run build:netlify` y la carpeta `netlify-dist`. El build incluye `api/config.json`, `_redirects` y `_headers`, por lo que también se puede publicar la carpeta mediante Netlify Drop. `/api/config` devuelve solamente la URL y la clave publishable; son datos públicos por diseño. Las contraseñas, tokens de usuario y claves secretas no se incorporan al artefacto. Si cambia el proyecto Supabase hay que recompilar.
+
+La sesión se valida directamente contra Supabase. La entrada web es pública, mientras los registros y archivos del programa conservan las políticas RLS y los permisos existentes. El acceso con correo y contraseña no utiliza una redirección OAuth. Si se incorporan recuperación de contraseña, magic links o OAuth, se deberán configurar sus URLs de retorno en Supabase.
+
+La primera publicación se realiza mediante un artefacto verificado en Netlify Drop. No se habilita despliegue automático por cada push: se puede conectar posteriormente este repositorio con el comando, carpeta y variables anteriores.
+
+## Ejecutar la versión anterior de Sites
 
 Recomendado: Node.js 24 LTS y npm. En la carpeta del proyecto:
 
@@ -119,3 +143,11 @@ En navegador se comprobó el inicio de sesión real, apertura de fichas, desplie
 Publicación confirmada por Sites el 19 de noviembre de 2026: https://monitoreo-mentorias-2026-inacap.zaxht.chatgpt.site (privada). Fuente de la versión publicada: b510cdf6acba44d483b7975631f87ab154e61d3d. Variables SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY configuradas en el hosting. Repositorio privado: https://github.com/Zaxht/creaempresa-mentorias-inacap. El servidor de desarrollo permanece en http://localhost:3000.
 
 El informe técnico breve está en evidencias/Informe_EVA3.html y el registro de comprobaciones en evidencias/VERIFICACION.txt. El HTML es un complemento de implementación; no reemplaza ni modifica el Word anterior de otra asignatura. La vista del informe HTML no se pudo abrir en el navegador integrado porque este bloquea URLs file://; sus capturas se revisaron por separado.
+
+
+### Comprobación del despliegue Netlify
+
+La portada y /api/config devolvieron HTTP 200 desde el dominio definitivo. La configuración identifica el mismo proyecto Supabase y una clave publishable. Se comprobaron las cabeceras nosniff, DENY y no-store en la configuración. La compilación se probó localmente con inicio de sesión y carga del dashboard real. Typecheck, lint y las 32 pruebas automatizadas aprobaron. El paquete subido contiene únicamente los archivos estáticos de netlify-dist, sin archivos de entorno.
+
+
+Desde el dominio Netlify definitivo se verificaron también el inicio de sesión del administrador, la carga de las dos mentorías de prueba y la descarga de Excel. El archivo exportado contiene las cinco hojas, el logo y los datos ficticios existentes de Supabase. Se corrigió el ajuste de etiquetas largas en las tarjetas del resumen.
