@@ -1,4 +1,4 @@
-import type { AppState, Mentorship } from './domain';
+import type { AppState, Mentorship, Mentor, Mentee } from './domain';
 
 export type Command = {
   entity: string;
@@ -6,6 +6,45 @@ export type Command = {
   version: number | null;
   patch: Record<string, unknown>;
 };
+
+// Profile dialogs save a single person without collecting another view's edits.
+export function personSaveState(
+  original: AppState,
+  record: Mentor | Mentee,
+): AppState {
+  if ('expertise' in record) {
+    if (!original.mentors.some((item) => item.id === record.id))
+      throw new Error('El perfil ya no está disponible. Actualiza los datos.');
+    return {
+      ...original,
+      mentors: original.mentors.map((item) =>
+        item.id === record.id ? record : item,
+      ),
+    };
+  }
+  if (!original.mentees.some((item) => item.id === record.id))
+    throw new Error('El perfil ya no está disponible. Actualiza los datos.');
+  return {
+    ...original,
+    mentees: original.mentees.map((item) =>
+      item.id === record.id ? record : item,
+    ),
+  };
+}
+
+export function acknowledgedPerson<T extends Mentor | Mentee>(
+  record: T,
+  commands: Command[],
+): T {
+  const entity = 'expertise' in record ? 'mentors' : 'mentees';
+  const command = commands.find(
+    (item) => item.entity === entity && item.id === record.id,
+  );
+  return {
+    ...record,
+    version: command ? (command.version ?? 0) + 1 : record.version,
+  };
+}
 
 // A dialog saves only its mentorship, preserving unsaved edits in other views.
 export function mentorshipSaveState(

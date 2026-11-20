@@ -44,6 +44,7 @@ import {
 import './mentorship-workspace.css';
 
 type Props = {
+  initialId?: string | null;
   role: Role;
   mentorships: Mentorship[];
   mentors: Mentor[];
@@ -153,7 +154,9 @@ export function MentorshipWorkspace(props: Props) {
     onSave,
     onUpload,
   } = props;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    props.initialId ?? null,
+  );
   const [editor, setEditor] = useState<Editor | null>(null);
   const [message, setMessage] = useState('');
   const detailTitle = useRef<HTMLHeadingElement>(null);

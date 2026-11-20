@@ -10,7 +10,81 @@ test('la fecha del programa conserva el día de Chile cuando UTC ya cambió', ()
   assert.equal(programDate(new Date('2026-11-19T02:30:00Z')), '2026-11-18');
   assert.equal(programDate(new Date('2026-11-19T04:00:00Z')), '2026-11-19');
 });
-import { collectChanges } from '../lib/mentorias/changes.ts';
+import {
+  collectChanges,
+  personSaveState,
+  acknowledgedPerson,
+} from '../lib/mentorias/changes.ts';
+
+test('guardar un perfil modifica solo esa persona y conserva el resto del programa', () => {
+  const original = {
+    mentors: [
+      { id: 'mentor', version: 2, name: 'Mentor', expertise: [] },
+      { id: 'otro', name: 'Otro', expertise: [] },
+    ],
+    mentees: [
+      { id: 'mentoreado', version: 4, name: 'Mentoreado', venture: 'Proyecto' },
+    ],
+    mentorships: [{ id: 'actividad', sessions: [] }],
+  };
+  for (const kind of ['mentors', 'mentees']) {
+    const draft = { ...original[kind][0], name: 'Nombre actualizado' };
+    const next = personSaveState(original, draft);
+    const commands = collectChanges(original, next);
+    assert.deepEqual(commands, [
+      {
+        entity: kind,
+        id: draft.id,
+        version: draft.version,
+        patch: { name: draft.name },
+      },
+    ]);
+    assert.equal(next.mentorships, original.mentorships);
+    assert.equal(
+      next[kind === 'mentors' ? 'mentees' : 'mentors'],
+      original[kind === 'mentors' ? 'mentees' : 'mentors'],
+    );
+    assert.notEqual(original[kind][0].name, draft.name);
+    assert.equal(
+      acknowledgedPerson(draft, commands).version,
+      draft.version + 1,
+    );
+    assert.equal(acknowledgedPerson(draft, []).version, draft.version);
+  }
+  assert.throws(
+    () => personSaveState(original, { id: 'desconocido', expertise: [] }),
+    /ya no está disponible/,
+  );
+  assert.throws(
+    () => personSaveState(original, { id: 'desconocido', venture: '' }),
+    /ya no está disponible/,
+  );
+});
+
+test('quitar la foto del perfil persiste null y no la URL temporal', () => {
+  const original = {
+    mentors: [
+      {
+        id: 'a',
+        version: 3,
+        name: 'A',
+        expertise: [],
+        photoPath: 'mentors/a/photo.jpg',
+        photo: 'https://old',
+      },
+    ],
+    mentees: [],
+    mentorships: [],
+  };
+  const draft = {
+    ...original.mentors[0],
+    photo: undefined,
+    photoPath: undefined,
+  };
+  assert.deepEqual(collectChanges(original, personSaveState(original, draft)), [
+    { entity: 'mentors', id: 'a', version: 3, patch: { photo: null } },
+  ]);
+});
 
 test('la exportación de mentor excluye las personas y mentorías ajenas', () => {
   const state = {

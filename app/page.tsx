@@ -4,11 +4,11 @@ import { CreateRecordDialog } from '@/components/create-record-dialog';
 import { PersonFields } from '@/components/person-fields';
 import { ProgramGraphic } from '@/components/program-graphic';
 import { MentorshipWorkspace } from '@/components/mentorship-workspace';
+import { PeopleWorkspace, PersonProfile } from '@/components/people-workspace';
 
-import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   CalendarDays,
-  Camera,
   ClipboardCheck,
   Clock3,
   Download,
@@ -25,11 +25,9 @@ import {
   Target,
   MapPin,
   BadgeCheck,
-  ChevronRight,
   LogOut,
   RefreshCw,
   Save,
-  PencilLine,
   Sparkles,
 } from 'lucide-react';
 
@@ -40,7 +38,6 @@ import {
   ProgramSelect as NativeSelect,
   ProgramOption as NativeSelectOption,
 } from '@/components/program-select';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { MentoriasAccess } from '@/components/mentorias-access';
 import {
@@ -52,12 +49,10 @@ import {
   collectChanges,
   mentorshipSaveState,
   acknowledgedMentorship,
+  personSaveState,
+  acknowledgedPerson,
 } from '@/lib/mentorias/changes';
-import {
-  getMetrics,
-  getMentorStats,
-  getMenteeStats,
-} from '@/lib/mentorias/metrics';
+import { getMetrics } from '@/lib/mentorias/metrics';
 import {
   imageToBase64,
   downloadBlob,
@@ -341,6 +336,7 @@ function WorkspaceView({
   const [activeMenteeId, setActiveMenteeId] = useState(
     workspace?.menteeId ?? DEFAULT_MENTEES[0].id,
   );
+  const [mentorshipToOpen, setMentorshipToOpen] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [saveWarning, setSaveWarning] = useState('');
@@ -462,32 +458,47 @@ function WorkspaceView({
   const metrics = getMetrics(scopedState);
   const navigation = getNavigation(role);
 
-  const updateMentor = (mentorId: string, patch: Partial<Mentor>) => {
+  const savePerson = async (record: Mentor | Mentee) => {
+    if (saving) throw new Error('Espera a que termine el guardado.');
+    const mentor = 'expertise' in record;
     if (
       role !== 'Administrador' &&
-      (role !== 'Mentor' || mentorId !== activeMentor?.id)
+      !(mentor
+        ? role === 'Mentor' && record.id === activeMentor?.id
+        : role === 'Mentoreado' && record.id === activeMentee?.id)
     )
-      return;
-    setState((current) => ({
-      ...current,
-      mentors: current.mentors.map((mentor) =>
-        mentor.id === mentorId ? { ...mentor, ...patch } : mentor,
-      ),
-    }));
+      throw new Error('No tienes permiso para editar este perfil.');
+    setSaving(true);
+    try {
+      let saved = record;
+      if (repository) {
+        const next = personSaveState(original, record);
+        const commands = collectChanges(original, next);
+        await repository.save(original, next);
+        saved = acknowledgedPerson(record, commands);
+        try {
+          const fresh = await repository.load();
+          saved =
+            fresh.state[mentor ? 'mentors' : 'mentees'].find(
+              (item) => item.id === record.id,
+            ) ?? saved;
+        } catch {
+          setSaveWarning(
+            'El perfil se guardó. Actualiza cuando vuelva la conexión para renovar su foto.',
+          );
+        }
+      }
+      setOriginal((value) => personSaveState(value, saved));
+      setState((value) => personSaveState(value, saved));
+    } finally {
+      setSaving(false);
+    }
   };
-
-  const updateMentee = (menteeId: string, patch: Partial<Mentee>) => {
-    if (
-      role !== 'Administrador' &&
-      (role !== 'Mentoreado' || menteeId !== activeMentee?.id)
-    )
-      return;
-    setState((current) => ({
-      ...current,
-      mentees: current.mentees.map((mentee) =>
-        mentee.id === menteeId ? { ...mentee, ...patch } : mentee,
-      ),
-    }));
+  const openMentorship = (id: string) => {
+    setMentorshipToOpen(id);
+    setSearch('');
+    setStatusFilter('Todos');
+    setActiveView('mentorships');
   };
 
   const saveMentorship = async (record: Mentorship) => {
@@ -690,46 +701,6 @@ function WorkspaceView({
     setActiveView('mentorships');
   };
 
-  const upload = async (
-    event: ChangeEvent<HTMLInputElement>,
-    kind: 'photo' | 'document',
-    prefix: string,
-    commit: (attachment: Attachment) => void,
-  ) => {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    if (!file) return;
-    setSaveWarning('');
-    try {
-      await validateFile(file, kind);
-      const attachment = repository
-        ? await repository.upload(file, kind, prefix)
-        : await readFile(file);
-      commit(attachment);
-    } catch (error) {
-      setSaveWarning(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo cargar el archivo. Guarda primero el registro y vuelve a intentar.',
-      );
-    } finally {
-      input.value = '';
-    }
-  };
-  const handleMentorPhoto = (
-    id: string,
-    event: ChangeEvent<HTMLInputElement>,
-  ) =>
-    upload(event, 'photo', `mentors/${id}`, (a) =>
-      updateMentor(id, { photo: a.dataUrl, photoPath: a.path }),
-    );
-  const handleMenteePhoto = (
-    id: string,
-    event: ChangeEvent<HTMLInputElement>,
-  ) =>
-    upload(event, 'photo', `mentees/${id}`, (a) =>
-      updateMentee(id, { photo: a.dataUrl, photoPath: a.path }),
-    );
   const exportExcel = async () => {
     if (role === 'Mentoreado') return;
     if (
@@ -889,6 +860,7 @@ function WorkspaceView({
                   key={item.id}
                   type="button"
                   onClick={() => {
+                    setMentorshipToOpen(null);
                     setActiveView(item.id);
                     window.scrollTo({ top: 0, behavior: 'instant' });
                   }}
@@ -945,54 +917,99 @@ function WorkspaceView({
               />
             ) : null}
 
-            {activeView === 'mentors' ? (
-              <MentorsView
+            {activeView === 'mentors' || activeView === 'mentees' ? (
+              <PeopleWorkspace
+                key={activeView}
+                kind={activeView}
                 mentors={mentors}
-                mentorships={mentorships}
-                newMentor={newMentor}
-                setNewMentor={setNewMentor}
-                addMentor={addMentor}
-                updateMentor={updateMentor}
-                handleMentorPhoto={handleMentorPhoto}
-              />
-            ) : null}
-
-            {activeView === 'mentees' ? (
-              <MenteesView
                 mentees={mentees}
                 mentorships={mentorships}
-                newMentee={newMentee}
-                setNewMentee={setNewMentee}
-                addMentee={addMentee}
-                updateMentee={updateMentee}
-                handleMenteePhoto={handleMenteePhoto}
-              />
-            ) : null}
-
-            {activeView === 'profile' && role === 'Mentor' && activeMentor ? (
-              <MentorProfileView
-                mentor={activeMentor}
-                mentorships={mentorships}
-                mentees={mentees}
-                updateMentor={updateMentor}
-                handleMentorPhoto={handleMentorPhoto}
+                onSave={savePerson}
+                onUpload={uploadSessionFile}
+                onOpenMentorship={openMentorship}
+                heading={
+                  <PageHeading
+                    eyebrow={
+                      activeView === 'mentors' ? 'Equipo' : 'Participantes'
+                    }
+                    title={
+                      activeView === 'mentors' ? 'Mentores' : 'Mentoreados'
+                    }
+                    body={
+                      activeView === 'mentors'
+                        ? 'Las personas que acompañan cada proyecto. Conoce su experiencia y recorrido.'
+                        : 'Personas e ideas en crecimiento. Conoce sus proyectos y acompañamientos.'
+                    }
+                  />
+                }
+                createAction={
+                  activeView === 'mentors' ? (
+                    <CreateRecordDialog
+                      title="Nuevo mentor"
+                      description="Una ficha y una cuenta de acceso, en un solo paso."
+                      onCreate={addMentor}
+                      onCancel={() =>
+                        setNewMentor({
+                          name: '',
+                          expertise: '',
+                          email: '',
+                          password: '',
+                          phone: '',
+                        })
+                      }
+                    >
+                      <PersonFields
+                        kind="mentor"
+                        value={newMentor}
+                        onChange={(patch) =>
+                          setNewMentor({ ...newMentor, ...patch })
+                        }
+                      />
+                    </CreateRecordDialog>
+                  ) : (
+                    <CreateRecordDialog
+                      title="Nuevo mentoreado"
+                      description="Una ficha y una cuenta de acceso, en un solo paso."
+                      onCreate={addMentee}
+                      onCancel={() =>
+                        setNewMentee({
+                          name: '',
+                          venture: '',
+                          email: '',
+                          password: '',
+                          phone: '',
+                        })
+                      }
+                    >
+                      <PersonFields
+                        kind="mentee"
+                        value={newMentee}
+                        onChange={(patch) =>
+                          setNewMentee({ ...newMentee, ...patch })
+                        }
+                      />
+                    </CreateRecordDialog>
+                  )
+                }
               />
             ) : null}
 
             {activeView === 'profile' &&
-            role === 'Mentoreado' &&
-            activeMentee ? (
-              <MenteeProfileView
-                mentee={activeMentee}
-                mentorships={mentorships}
+            (role === 'Mentor' ? activeMentor : activeMentee) ? (
+              <PersonProfile
+                person={role === 'Mentor' ? activeMentor : activeMentee}
                 mentors={mentors}
-                updateMentee={updateMentee}
-                handleMenteePhoto={handleMenteePhoto}
+                mentees={mentees}
+                mentorships={mentorships}
+                onSave={savePerson}
+                onUpload={uploadSessionFile}
+                onOpenMentorship={openMentorship}
               />
             ) : null}
 
             {activeView === 'mentorships' ? (
               <MentorshipWorkspace
+                initialId={mentorshipToOpen}
                 createAction={
                   role === 'Administrador' ? (
                     <NewMentorshipForm
@@ -1340,257 +1357,6 @@ function DashboardView({
   );
 }
 
-function MentorsView({
-  mentors,
-  mentorships,
-  newMentor,
-  setNewMentor,
-  addMentor,
-  updateMentor,
-  handleMentorPhoto,
-}: {
-  mentors: Mentor[];
-  mentorships: Mentorship[];
-  newMentor: {
-    name: string;
-    expertise: string;
-    email: string;
-    password: string;
-    phone: string;
-  };
-  setNewMentor: (value: {
-    name: string;
-    expertise: string;
-    email: string;
-    password: string;
-    phone: string;
-  }) => void;
-  addMentor: () => Promise<void>;
-  updateMentor: (mentorId: string, patch: Partial<Mentor>) => void;
-  handleMentorPhoto: (
-    mentorId: string,
-    event: ChangeEvent<HTMLInputElement>,
-  ) => void;
-}) {
-  return (
-    <div className="grid gap-5">
-      <PageHeading
-        eyebrow="Equipo"
-        title="Mentores"
-        body="Las personas que acompañan cada proyecto. Gestiona sus perfiles y áreas de experiencia."
-      />
-
-      <div className="flex justify-end">
-        <CreateRecordDialog
-          title="Nuevo mentor"
-          description="Una ficha y una cuenta de acceso, en un solo paso."
-          onCreate={addMentor}
-          onCancel={() =>
-            setNewMentor({
-              name: '',
-              expertise: '',
-              email: '',
-              password: '',
-              phone: '',
-            })
-          }
-        >
-          <PersonFields
-            kind="mentor"
-            value={newMentor}
-            onChange={(patch) => setNewMentor({ ...newMentor, ...patch })}
-          />
-        </CreateRecordDialog>
-      </div>
-
-      <section className="grid gap-4 xl:grid-cols-2">
-        {mentors.map((mentor) => (
-          <MentorCard
-            key={mentor.id}
-            mentor={mentor}
-            stats={getMentorStats(mentor.id, mentorships)}
-            updateMentor={updateMentor}
-            handleMentorPhoto={handleMentorPhoto}
-          />
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function MenteesView({
-  mentees,
-  mentorships,
-  newMentee,
-  setNewMentee,
-  addMentee,
-  updateMentee,
-  handleMenteePhoto,
-}: {
-  mentees: Mentee[];
-  mentorships: Mentorship[];
-  newMentee: {
-    name: string;
-    venture: string;
-    email: string;
-    password: string;
-    phone: string;
-  };
-  setNewMentee: (value: {
-    name: string;
-    venture: string;
-    email: string;
-    password: string;
-    phone: string;
-  }) => void;
-  addMentee: () => Promise<void>;
-  updateMentee: (menteeId: string, patch: Partial<Mentee>) => void;
-  handleMenteePhoto: (
-    menteeId: string,
-    event: ChangeEvent<HTMLInputElement>,
-  ) => void;
-}) {
-  return (
-    <div className="grid gap-5">
-      <PageHeading
-        eyebrow="Participantes"
-        title="Mentoreados"
-        body="Información del emprendimiento, etapa y necesidad principal."
-      />
-
-      <div className="flex justify-end">
-        <CreateRecordDialog
-          title="Nuevo mentoreado"
-          description="Una ficha y una cuenta de acceso, en un solo paso."
-          onCreate={addMentee}
-          onCancel={() =>
-            setNewMentee({
-              name: '',
-              venture: '',
-              email: '',
-              password: '',
-              phone: '',
-            })
-          }
-        >
-          <PersonFields
-            kind="mentee"
-            value={newMentee}
-            onChange={(patch) => setNewMentee({ ...newMentee, ...patch })}
-          />
-        </CreateRecordDialog>
-      </div>
-
-      <section className="grid gap-4 xl:grid-cols-2">
-        {mentees.map((mentee) => (
-          <MenteeCard
-            key={mentee.id}
-            mentee={mentee}
-            stats={getMenteeStats(mentee.id, mentorships)}
-            updateMentee={updateMentee}
-            handleMenteePhoto={handleMenteePhoto}
-          />
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function MentorProfileView({
-  mentor,
-  mentorships,
-  mentees,
-  updateMentor,
-  handleMentorPhoto,
-}: {
-  mentor: Mentor;
-  mentorships: Mentorship[];
-  mentees: Mentee[];
-  updateMentor: (mentorId: string, patch: Partial<Mentor>) => void;
-  handleMentorPhoto: (
-    mentorId: string,
-    event: ChangeEvent<HTMLInputElement>,
-  ) => void;
-}) {
-  const myMentorships = mentorships.filter(
-    (item) => item.mentorId === mentor.id,
-  );
-  const stats = getMentorStats(mentor.id, mentorships);
-
-  return (
-    <div className="grid gap-5">
-      <PageHeading
-        eyebrow="Perfil mentor"
-        title={mentor.name}
-        body="Ficha personal y seguimiento de mentorías asignadas."
-      />
-      <MentorCard
-        mentor={mentor}
-        stats={stats}
-        updateMentor={updateMentor}
-        handleMentorPhoto={handleMentorPhoto}
-      />
-      <section className="grid gap-3 lg:grid-cols-2">
-        {myMentorships.map((mentorship) => (
-          <CompactMentorshipCard
-            key={mentorship.id}
-            mentorship={mentorship}
-            mentor={mentor}
-            mentee={mentees.find((mentee) => mentee.id === mentorship.menteeId)}
-          />
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function MenteeProfileView({
-  mentee,
-  mentorships,
-  mentors,
-  updateMentee,
-  handleMenteePhoto,
-}: {
-  mentee: Mentee;
-  mentorships: Mentorship[];
-  mentors: Mentor[];
-  updateMentee: (menteeId: string, patch: Partial<Mentee>) => void;
-  handleMenteePhoto: (
-    menteeId: string,
-    event: ChangeEvent<HTMLInputElement>,
-  ) => void;
-}) {
-  const myMentorships = mentorships.filter(
-    (item) => item.menteeId === mentee.id,
-  );
-
-  return (
-    <div className="grid gap-5">
-      <PageHeading
-        eyebrow="Perfil mentoreado"
-        title={mentee.name}
-        body="Ficha del emprendimiento y avance de sesiones asociadas."
-      />
-      <MenteeCard
-        mentee={mentee}
-        stats={getMenteeStats(mentee.id, mentorships)}
-        updateMentee={updateMentee}
-        handleMenteePhoto={handleMenteePhoto}
-      />
-      <section className="grid gap-3 lg:grid-cols-2">
-        {myMentorships.map((mentorship) => (
-          <CompactMentorshipCard
-            key={mentorship.id}
-            mentorship={mentorship}
-            mentor={mentors.find((mentor) => mentor.id === mentorship.mentorId)}
-            mentee={mentee}
-          />
-        ))}
-      </section>
-    </div>
-  );
-}
-
 function ExportView({
   metrics,
   exportOptions,
@@ -1899,320 +1665,6 @@ function SummaryPanel({
   );
 }
 
-function SpecialtiesInput({
-  expertise,
-  onChange,
-}: {
-  expertise: string[];
-  onChange: (value: string[]) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-  return (
-    <Input
-      value={editing ? draft : expertise.join(', ')}
-      placeholder="Ej. Finanzas, ventas, gestión"
-      maxLength={150}
-      onFocus={() => {
-        setDraft(expertise.join(', '));
-        setEditing(true);
-      }}
-      onBlur={() => setEditing(false)}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        onChange(
-          event.target.value
-            .split(',')
-            .map((item) => item.trim())
-            .filter(Boolean),
-        );
-      }}
-    />
-  );
-}
-
-function MentorCard({
-  mentor,
-  stats,
-  updateMentor,
-  handleMentorPhoto,
-}: {
-  mentor: Mentor;
-  stats: ReturnType<typeof getMentorStats>;
-  updateMentor: (mentorId: string, patch: Partial<Mentor>) => void;
-  handleMentorPhoto: (
-    mentorId: string,
-    event: ChangeEvent<HTMLInputElement>,
-  ) => void;
-}) {
-  return (
-    <article className="surface-card person-card p-5">
-      <div className="person-card-heading mb-5 flex items-center gap-4">
-        <Avatar name={mentor.name} photo={mentor.photo} size="lg" />
-        <div className="min-w-0">
-          <h3 className="break-words text-lg font-semibold tracking-tight">
-            {mentor.name}
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {mentor.title || 'Perfil del programa'}
-          </p>
-        </div>
-      </div>
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {mentor.expertise.map((item) => (
-          <span key={item} className="expertise-chip">
-            <Sparkles size={11} />
-            {item}
-          </span>
-        ))}
-      </div>
-      {mentor.email && (
-        <p className="mb-4 flex items-center gap-2 break-all text-xs text-muted-foreground">
-          <Mail size={14} className="shrink-0" />
-          {mentor.email}
-        </p>
-      )}
-      <details className="group">
-        <summary className="profile-edit-toggle">
-          <PencilLine size={15} className="inline mr-2" aria-hidden="true" />
-          Editar ficha
-          <ChevronRight size={15} className="float-right" aria-hidden="true" />
-        </summary>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Al terminar, pulsa Guardar cambios en la barra superior.
-        </p>
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row">
-          <div className="flex shrink-0 flex-col items-start gap-3">
-            <UploadLabel
-              icon={<Camera />}
-              label={mentor.photo ? 'Cambiar foto' : 'Añadir foto'}
-            >
-              <input
-                type="file"
-                accept="image/png,image/jpeg"
-                className="sr-only"
-                onChange={(event) => handleMentorPhoto(mentor.id, event)}
-              />
-            </UploadLabel>
-          </div>
-          <div className="grid min-w-0 flex-1 gap-3">
-            <div className="grid gap-3 md:grid-cols-2">
-              <FieldLabel label="Nombre completo">
-                <Input
-                  maxLength={100}
-                  value={mentor.name}
-                  onChange={(event) =>
-                    updateMentor(mentor.id, { name: event.target.value })
-                  }
-                />
-              </FieldLabel>
-              <FieldLabel label="Profesión (opcional)">
-                <Input
-                  maxLength={150}
-                  placeholder="Ej. Contador auditor"
-                  value={mentor.title}
-                  onChange={(event) =>
-                    updateMentor(mentor.id, { title: event.target.value })
-                  }
-                />
-              </FieldLabel>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <FieldLabel label="Correo de contacto">
-                <Input
-                  type="email"
-                  maxLength={254}
-                  value={mentor.email}
-                  onChange={(event) =>
-                    updateMentor(mentor.id, { email: event.target.value })
-                  }
-                  placeholder="correo@dominio.cl"
-                />
-              </FieldLabel>
-              <FieldLabel label="Teléfono">
-                <Input
-                  type="tel"
-                  maxLength={30}
-                  value={mentor.phone}
-                  onChange={(event) =>
-                    updateMentor(mentor.id, { phone: event.target.value })
-                  }
-                  placeholder="Ej. +56 9 1234 5678"
-                />
-              </FieldLabel>
-            </div>
-            <FieldLabel label="Especialidades">
-              <SpecialtiesInput
-                expertise={mentor.expertise}
-                onChange={(expertise) => updateMentor(mentor.id, { expertise })}
-              />
-            </FieldLabel>
-            <FieldLabel label="Sobre mí">
-              <Textarea
-                value={mentor.bio}
-                onChange={(event) =>
-                  updateMentor(mentor.id, { bio: event.target.value })
-                }
-                className="min-h-20"
-              />
-            </FieldLabel>
-          </div>
-        </div>
-      </details>
-      <div className="mt-4 grid gap-2 border-t border-border pt-4 sm:grid-cols-3">
-        <MiniStat label="Mentorías" value={stats.total} />
-        <MiniStat label="Terminadas" value={stats.finished} />
-        <MiniStat label="Horas" value={formatHours(stats.hours)} />
-      </div>
-    </article>
-  );
-}
-
-function MenteeCard({
-  mentee,
-  stats,
-  updateMentee,
-  handleMenteePhoto,
-}: {
-  mentee: Mentee;
-  stats: ReturnType<typeof getMenteeStats>;
-  updateMentee: (menteeId: string, patch: Partial<Mentee>) => void;
-  handleMenteePhoto: (
-    menteeId: string,
-    event: ChangeEvent<HTMLInputElement>,
-  ) => void;
-}) {
-  return (
-    <article className="surface-card person-card p-5">
-      <div className="person-card-heading mb-5 flex items-center gap-4">
-        <Avatar name={mentee.name} photo={mentee.photo} size="lg" />
-        <div className="min-w-0">
-          <h3 className="break-words text-lg font-semibold tracking-tight">
-            {mentee.name}
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {mentee.venture || 'Perfil del programa'}
-          </p>
-        </div>
-      </div>
-      <div className="mb-4 flex flex-wrap gap-2">
-        {mentee.stage && (
-          <span className="expertise-chip">
-            <BriefcaseBusiness size={12} />
-            {mentee.stage}
-          </span>
-        )}
-        {mentee.need && (
-          <p className="w-full text-xs leading-relaxed text-muted-foreground line-clamp-2">
-            {mentee.need}
-          </p>
-        )}
-      </div>
-      {mentee.email && (
-        <p className="mb-4 flex items-center gap-2 break-all text-xs text-muted-foreground">
-          <Mail size={14} className="shrink-0" />
-          {mentee.email}
-        </p>
-      )}
-      <details className="group">
-        <summary className="profile-edit-toggle">
-          <PencilLine size={15} className="inline mr-2" aria-hidden="true" />
-          Editar ficha
-          <ChevronRight size={15} className="float-right" aria-hidden="true" />
-        </summary>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Al terminar, pulsa Guardar cambios en la barra superior.
-        </p>
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row">
-          <div className="flex shrink-0 flex-col items-start gap-3">
-            <UploadLabel
-              icon={<Camera />}
-              label={mentee.photo ? 'Cambiar foto' : 'Añadir foto'}
-            >
-              <input
-                type="file"
-                accept="image/png,image/jpeg"
-                className="sr-only"
-                onChange={(event) => handleMenteePhoto(mentee.id, event)}
-              />
-            </UploadLabel>
-          </div>
-          <div className="grid min-w-0 flex-1 gap-3">
-            <div className="grid gap-3 md:grid-cols-2">
-              <FieldLabel label="Nombre completo">
-                <Input
-                  maxLength={100}
-                  value={mentee.name}
-                  onChange={(event) =>
-                    updateMentee(mentee.id, { name: event.target.value })
-                  }
-                />
-              </FieldLabel>
-              <FieldLabel label="Emprendimiento">
-                <Input
-                  maxLength={150}
-                  value={mentee.venture}
-                  onChange={(event) =>
-                    updateMentee(mentee.id, { venture: event.target.value })
-                  }
-                />
-              </FieldLabel>
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <FieldLabel label="Etapa del emprendimiento">
-                <Input
-                  placeholder="Ej. Idea, en marcha o crecimiento"
-                  maxLength={100}
-                  value={mentee.stage}
-                  onChange={(event) =>
-                    updateMentee(mentee.id, { stage: event.target.value })
-                  }
-                />
-              </FieldLabel>
-              <FieldLabel label="Correo de contacto">
-                <Input
-                  type="email"
-                  maxLength={254}
-                  value={mentee.email}
-                  onChange={(event) =>
-                    updateMentee(mentee.id, { email: event.target.value })
-                  }
-                  placeholder="correo@dominio.cl"
-                />
-              </FieldLabel>
-              <FieldLabel label="Teléfono">
-                <Input
-                  type="tel"
-                  maxLength={30}
-                  value={mentee.phone}
-                  onChange={(event) =>
-                    updateMentee(mentee.id, { phone: event.target.value })
-                  }
-                  placeholder="Ej. +56 9 1234 5678"
-                />
-              </FieldLabel>
-            </div>
-            <FieldLabel label="¿En qué necesita apoyo?">
-              <Textarea
-                value={mentee.need}
-                onChange={(event) =>
-                  updateMentee(mentee.id, { need: event.target.value })
-                }
-                className="min-h-20"
-              />
-            </FieldLabel>
-          </div>
-        </div>
-      </details>
-      <div className="mt-4 grid gap-2 border-t border-border pt-4 sm:grid-cols-3">
-        <MiniStat label="Mentorías" value={stats.total} />
-        <MiniStat label="Terminadas" value={stats.finished} />
-        <MiniStat label="Sesiones" value={stats.completedSessions} />
-      </div>
-    </article>
-  );
-}
-
 function CompactMentorshipCard({
   mentorship,
   mentor,
@@ -2328,40 +1780,6 @@ function PersonLine({
             : (person as Mentee | undefined)?.venture || 'Sin emprendimiento'}
         </p>
       </div>
-    </div>
-  );
-}
-
-function UploadLabel({
-  icon,
-  label,
-  disabled,
-  children,
-}: {
-  icon: ReactNode;
-  label: string;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <label
-      className={cn(
-        'inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-white px-2.5 text-sm font-medium transition-colors hover:bg-muted [&_svg]:size-4',
-        disabled && 'pointer-events-none opacity-50',
-      )}
-    >
-      {icon}
-      {label}
-      {children}
-    </label>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-lg bg-muted/45 px-3 py-2">
-      <p className="text-sm font-medium text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
     </div>
   );
 }

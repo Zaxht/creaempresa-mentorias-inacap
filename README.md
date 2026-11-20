@@ -11,7 +11,7 @@ Aplicación web para administrar mentores, mentoreados y sus sesiones de acompa�
 - **Mentor:** actualiza su perfil y las sesiones de sus mentorías; exporta la información a la que tiene acceso.
 - **Mentoreado:** actualiza su ficha y consulta sus mentorías y sesiones.
 
-Las altas se guardan con **Crear**. Las fichas se confirman con **Guardar cambios**. Las mentorías y sesiones se editan en su propia ventana y se guardan desde allí. Cada mentoría tiene seis sesiones; cada sesión admite una foto PNG/JPEG de hasta 2 MB y un documento PDF de hasta 5 MB.
+Las altas se guardan con **Crear**. Las fichas muestran un perfil de lectura con contacto y actividad. **Editar perfil** abre una ventana independiente: **Guardar perfil** confirma los cambios y **Cancelar** los descarta. Las mentorías y sesiones también se editan y guardan en su propia ventana. Cada mentoría tiene seis sesiones; cada sesión admite una foto PNG/JPEG de hasta 2 MB y un documento PDF de hasta 5 MB.
 
 El acceso requiere una cuenta del programa creada por el administrador. Se utiliza el correo y la contraseña de Supabase.
 
