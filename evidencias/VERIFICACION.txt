@@ -28,3 +28,8 @@ REVISIÓN 20 DE NOVIEMBRE DE 2026
 - Typecheck, lint, 32 pruebas y build Netlify aprobados tras el cambio.
 - alta-mentor.png y alta-movil.png: formularios de demostración. flujo-guardado.png: registros ficticios guardados en Supabase real.
 - Normalización y limitación de sesiones documentadas como decisiones y desviaciones explícitas; no se declara aprobación docente.
+
+CUENTAS DE PRUEBA INDEPENDIENTES — 20 de noviembre
+mentor@mentor.com: Mentor, ficha PRUEBA QA UX Mentor.
+mentoreado@mentoreado.com: Mentoreado, ficha PRUEBA QA UX Participante.
+Login web correcto con ambas cuentas. Cada una consulta únicamente su mentoría. El mentor guardó una sesión propia y se restauró su resumen original. PostgreSQL rechazó la edición del mentoreado y la edición de sesiones ajenas por el mentor (42501). El administrador conserva su rol. Evidencia: cuenta-mentoreado.jpg. Contraseñas excluidas de la documentación.

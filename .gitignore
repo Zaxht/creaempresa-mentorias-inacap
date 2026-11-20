@@ -51,3 +51,6 @@ next-env.d.ts
 !/evaluacion2/implementacion/
 /auto.glb
 /crear_auto.py
+
+# Local test-account access details
+/links.txt
