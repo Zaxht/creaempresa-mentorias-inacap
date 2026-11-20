@@ -89,9 +89,7 @@ export function CreateRecordDialog({
               >
                 Cancelar
               </Button>
-              <Button type="submit">
-                {busy ? 'Guardando…' : 'Crear y guardar'}
-              </Button>
+              <Button type="submit">{busy ? 'Guardando…' : 'Crear'}</Button>
             </div>
           </fieldset>
         </form>

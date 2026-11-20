@@ -306,6 +306,7 @@ function sanitizeFilename(name: string) {
     .split('')
     .filter((char) => char.charCodeAt(0) >= 32)
     .join('')
+    .replace(/\.xlsx$/i, '')
     .replace(/\s+/g, '-')
     .toLowerCase();
 
@@ -372,15 +373,14 @@ function WorkspaceView({
   const [newMentee, setNewMentee] = useState({
     name: '',
     venture: '',
-    need: '',
     email: '',
     phone: '',
   });
   const [newMentorship, setNewMentorship] = useState({
-    mentorId: workspace?.state.mentors[0]?.id ?? DEFAULT_MENTORS[0].id,
-    menteeId: workspace?.state.mentees[0]?.id ?? DEFAULT_MENTEES[0].id,
+    mentorId: '',
+    menteeId: '',
     month: MONTHS[new Date().getMonth()],
-    service: SERVICES[0] as string,
+    service: '',
   });
 
   useEffect(() => {
@@ -668,8 +668,6 @@ function WorkspaceView({
 
     await createRecord('mentors', mentor);
     setActiveMentorId(mentor.id);
-    if (!mentors.some((m) => m.id === newMentorship.mentorId))
-      setNewMentorship((current) => ({ ...current, mentorId: mentor.id }));
     setNewMentor({ name: '', expertise: '', email: '', phone: '' });
   };
 
@@ -684,17 +682,15 @@ function WorkspaceView({
       id: crypto.randomUUID(),
       name,
       venture: newMentee.venture.trim(),
-      stage: 'Por registrar',
+      stage: '',
       email: newMentee.email.trim(),
       phone: newMentee.phone.trim(),
-      need: newMentee.need.trim(),
+      need: '',
     };
 
     await createRecord('mentees', mentee);
     setActiveMenteeId(mentee.id);
-    if (!mentees.some((m) => m.id === newMentorship.menteeId))
-      setNewMentorship((current) => ({ ...current, menteeId: mentee.id }));
-    setNewMentee({ name: '', venture: '', need: '', email: '', phone: '' });
+    setNewMentee({ name: '', venture: '', email: '', phone: '' });
   };
 
   const addMentorship = async () => {
@@ -704,8 +700,10 @@ function WorkspaceView({
       !mentors.some((m) => m.id === newMentorship.mentorId) ||
       !mentees.some((m) => m.id === newMentorship.menteeId)
     ) {
-      throw new Error('Primero registra un mentor y un mentoreado.');
+      throw new Error('Selecciona un mentor y un mentoreado.');
     }
+    if (!SERVICES.includes(newMentorship.service as (typeof SERVICES)[number]))
+      throw new Error('Selecciona el servicio de la mentoría.');
 
     const mentorship: Mentorship = {
       id: crypto.randomUUID(),
@@ -727,6 +725,12 @@ function WorkspaceView({
     };
 
     await createRecord('mentorships', mentorship);
+    setNewMentorship({
+      mentorId: '',
+      menteeId: '',
+      month: MONTHS[new Date().getMonth()],
+      service: '',
+    });
     setSearch('');
     setStatusFilter('Todos');
     setActiveView('mentorships');
@@ -1196,99 +1200,119 @@ function NewMentorshipForm({
   addMentorship: () => Promise<void>;
 }) {
   return (
-    <CreateRecordDialog
-      title="Nueva mentoría"
-      description="Selecciona las personas y el servicio para comenzar."
-      onCreate={addMentorship}
-      onCancel={() =>
-        setNewMentorship({
-          mentorId: state.mentors[0]?.id ?? '',
-          menteeId: state.mentees[0]?.id ?? '',
-          month: MONTHS[new Date().getMonth()],
-          service: SERVICES[0],
-        })
-      }
-      disabled={!state.mentors.length || !state.mentees.length}
-    >
-      <FieldLabel label="Mentor">
-        <NativeSelect
-          value={newMentorship.mentorId}
-          onChange={(event) =>
-            setNewMentorship({
-              ...newMentorship,
-              mentorId: event.target.value,
-            })
-          }
-          className="w-full"
-          aria-label="Seleccionar mentor"
-        >
-          {state.mentors.map((mentor) => (
-            <NativeSelectOption key={mentor.id} value={mentor.id}>
-              {mentor.name}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-      </FieldLabel>
-      <FieldLabel label="Mentoreado">
-        <NativeSelect
-          value={newMentorship.menteeId}
-          onChange={(event) =>
-            setNewMentorship({
-              ...newMentorship,
-              menteeId: event.target.value,
-            })
-          }
-          className="w-full"
-          aria-label="Seleccionar mentoreado"
-        >
-          {state.mentees.map((mentee) => (
-            <NativeSelectOption key={mentee.id} value={mentee.id}>
-              {mentee.name}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-      </FieldLabel>
-      <div className="grid grid-cols-2 gap-3">
-        <FieldLabel label="Mes">
+    <div className="grid gap-2">
+      <CreateRecordDialog
+        title="Nueva mentoría"
+        description="Selecciona las personas y el servicio. Se crearán seis sesiones pendientes."
+        onCreate={addMentorship}
+        onCancel={() =>
+          setNewMentorship({
+            mentorId: '',
+            menteeId: '',
+            month: MONTHS[new Date().getMonth()],
+            service: '',
+          })
+        }
+        disabled={!state.mentors.length || !state.mentees.length}
+      >
+        <FieldLabel label="Mentor">
           <NativeSelect
-            value={newMentorship.month}
+            required
+            value={newMentorship.mentorId}
             onChange={(event) =>
               setNewMentorship({
                 ...newMentorship,
-                month: event.target.value,
+                mentorId: event.target.value,
               })
             }
             className="w-full"
-            aria-label="Mes"
+            aria-label="Seleccionar mentor"
           >
-            {MONTHS.map((month) => (
-              <NativeSelectOption key={month} value={month}>
-                {month}
+            <NativeSelectOption value="" disabled>
+              Selecciona un mentor
+            </NativeSelectOption>
+            {state.mentors.map((mentor) => (
+              <NativeSelectOption key={mentor.id} value={mentor.id}>
+                {mentor.name}
               </NativeSelectOption>
             ))}
           </NativeSelect>
         </FieldLabel>
-        <FieldLabel label="Servicio">
+        <FieldLabel label="Mentoreado">
           <NativeSelect
-            value={newMentorship.service}
+            required
+            value={newMentorship.menteeId}
             onChange={(event) =>
               setNewMentorship({
                 ...newMentorship,
-                service: event.target.value,
+                menteeId: event.target.value,
               })
             }
             className="w-full"
-            aria-label="Servicio"
+            aria-label="Seleccionar mentoreado"
           >
-            {SERVICES.map((service) => (
-              <NativeSelectOption key={service} value={service}>
-                {service}
+            <NativeSelectOption value="" disabled>
+              Selecciona un mentoreado
+            </NativeSelectOption>
+            {state.mentees.map((mentee) => (
+              <NativeSelectOption key={mentee.id} value={mentee.id}>
+                {mentee.name}
               </NativeSelectOption>
             ))}
           </NativeSelect>
         </FieldLabel>
-      </div>
-    </CreateRecordDialog>
+        <div className="grid gap-4">
+          <FieldLabel label="Mes de inicio">
+            <NativeSelect
+              value={newMentorship.month}
+              onChange={(event) =>
+                setNewMentorship({
+                  ...newMentorship,
+                  month: event.target.value,
+                })
+              }
+              className="w-full"
+              aria-label="Mes"
+            >
+              {MONTHS.map((month) => (
+                <NativeSelectOption key={month} value={month}>
+                  {month}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </FieldLabel>
+          <FieldLabel label="Servicio">
+            <NativeSelect
+              required
+              value={newMentorship.service}
+              onChange={(event) =>
+                setNewMentorship({
+                  ...newMentorship,
+                  service: event.target.value,
+                })
+              }
+              className="w-full"
+              aria-label="Servicio"
+            >
+              <NativeSelectOption value="" disabled>
+                Selecciona un servicio
+              </NativeSelectOption>
+              {SERVICES.map((service) => (
+                <NativeSelectOption key={service} value={service}>
+                  {service}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </FieldLabel>
+        </div>
+      </CreateRecordDialog>
+      {(!state.mentors.length || !state.mentees.length) && (
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Primero registra al menos un mentor y un mentoreado desde sus
+          secciones.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1404,12 +1428,6 @@ function DashboardView({
             Vincula un mentor con un mentoreado. Al guardar se preparan las seis
             sesiones.
           </p>
-          {(!state.mentors.length || !state.mentees.length) && (
-            <p className="mb-4 text-sm text-amber-800">
-              Primero registra al menos un mentor y un mentoreado desde sus
-              secciones.
-            </p>
-          )}
           <NewMentorshipForm
             state={state}
             newMentorship={newMentorship}
@@ -1491,7 +1509,7 @@ function MentorsView({
       <div className="flex justify-end">
         <CreateRecordDialog
           title="Nuevo mentor"
-          description="Completa la ficha del mentor. El nombre es obligatorio. Puedes añadir una foto después."
+          description="Solo el nombre es obligatorio. Puedes completar el perfil después."
           onCreate={addMentor}
           onCancel={() =>
             setNewMentor({
@@ -1502,7 +1520,7 @@ function MentorsView({
             })
           }
         >
-          <FieldLabel label="Nombre">
+          <FieldLabel label="Nombre completo">
             <Input
               required
               maxLength={100}
@@ -1510,10 +1528,10 @@ function MentorsView({
               onChange={(event) =>
                 setNewMentor({ ...newMentor, name: event.target.value })
               }
-              placeholder="Nuevo mentor"
+              placeholder="Nombre y apellidos"
             />
           </FieldLabel>
-          <FieldLabel label="Especialidades">
+          <FieldLabel label="Especialidades (opcional)">
             <Input
               maxLength={150}
               value={newMentor.expertise}
@@ -1524,7 +1542,7 @@ function MentorsView({
             />
           </FieldLabel>
           <div className="grid gap-4 sm:grid-cols-2">
-            <FieldLabel label="Correo">
+            <FieldLabel label="Correo (opcional)">
               <Input
                 type="email"
                 maxLength={254}
@@ -1535,7 +1553,7 @@ function MentorsView({
                 placeholder="correo@dominio.cl"
               />
             </FieldLabel>
-            <FieldLabel label="Teléfono">
+            <FieldLabel label="Teléfono (opcional)">
               <Input
                 type="tel"
                 maxLength={30}
@@ -1543,7 +1561,7 @@ function MentorsView({
                 onChange={(event) =>
                   setNewMentor({ ...newMentor, phone: event.target.value })
                 }
-                placeholder="+56"
+                placeholder="Ej. +56 9 1234 5678"
               />
             </FieldLabel>
           </div>
@@ -1579,14 +1597,12 @@ function MenteesView({
   newMentee: {
     name: string;
     venture: string;
-    need: string;
     email: string;
     phone: string;
   };
   setNewMentee: (value: {
     name: string;
     venture: string;
-    need: string;
     email: string;
     phone: string;
   }) => void;
@@ -1608,19 +1624,18 @@ function MenteesView({
       <div className="flex justify-end">
         <CreateRecordDialog
           title="Nuevo mentoreado"
-          description="Completa los datos de la persona y su emprendimiento. El nombre es obligatorio."
+          description="Solo el nombre es obligatorio. Puedes completar el emprendimiento y los datos de contacto después."
           onCreate={addMentee}
           onCancel={() =>
             setNewMentee({
               name: '',
               venture: '',
-              need: '',
               email: '',
               phone: '',
             })
           }
         >
-          <FieldLabel label="Nombre">
+          <FieldLabel label="Nombre completo">
             <Input
               required
               maxLength={100}
@@ -1628,10 +1643,10 @@ function MenteesView({
               onChange={(event) =>
                 setNewMentee({ ...newMentee, name: event.target.value })
               }
-              placeholder="Nuevo mentoreado"
+              placeholder="Nombre y apellidos"
             />
           </FieldLabel>
-          <FieldLabel label="Emprendimiento">
+          <FieldLabel label="Emprendimiento (opcional)">
             <Input
               maxLength={150}
               value={newMentee.venture}
@@ -1641,18 +1656,8 @@ function MenteesView({
               placeholder="Nombre del proyecto"
             />
           </FieldLabel>
-          <FieldLabel label="Necesidad">
-            <Input
-              maxLength={150}
-              value={newMentee.need}
-              onChange={(event) =>
-                setNewMentee({ ...newMentee, need: event.target.value })
-              }
-              placeholder="Foco de apoyo"
-            />
-          </FieldLabel>
           <div className="grid gap-4 sm:grid-cols-2">
-            <FieldLabel label="Correo">
+            <FieldLabel label="Correo (opcional)">
               <Input
                 type="email"
                 maxLength={254}
@@ -1663,7 +1668,7 @@ function MenteesView({
                 placeholder="correo@dominio.cl"
               />
             </FieldLabel>
-            <FieldLabel label="Teléfono">
+            <FieldLabel label="Teléfono (opcional)">
               <Input
                 type="tel"
                 maxLength={30}
@@ -1671,7 +1676,7 @@ function MenteesView({
                 onChange={(event) =>
                   setNewMentee({ ...newMentee, phone: event.target.value })
                 }
-                placeholder="+56"
+                placeholder="Ej. +56 9 1234 5678"
               />
             </FieldLabel>
           </div>
@@ -1921,16 +1926,15 @@ function ExportView({
     label: string;
     detail: string;
   }> = [
-    { key: 'summary', label: 'Resumen', detail: 'KPIs y avance general' },
+    {
+      key: 'summary',
+      label: 'Resumen',
+      detail: 'Indicadores y avance general',
+    },
     { key: 'mentors', label: 'Mentores', detail: 'Perfiles y especialidades' },
     { key: 'mentees', label: 'Mentoreados', detail: 'Fichas de participantes' },
     { key: 'mentorships', label: 'Mentorías', detail: 'Estado, horas y SIR' },
     { key: 'sessions', label: 'Sesiones', detail: 'Detalle sesión por sesión' },
-    {
-      key: 'attachments',
-      label: 'Evidencias',
-      detail: 'Nombres de archivos adjuntos',
-    },
   ];
 
   return (
@@ -1982,11 +1986,50 @@ function ExportView({
               ))}
             </div>
 
+            {exportOptions.sessions && (
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-zinc-50 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4 accent-primary"
+                  checked={exportOptions.attachments}
+                  onChange={(event) =>
+                    setExportOptions({
+                      ...exportOptions,
+                      attachments: event.target.checked,
+                    })
+                  }
+                />
+                <span>
+                  Incluir nombres de evidencias en Sesiones
+                  <span className="block text-xs text-muted-foreground">
+                    Añade las columnas Foto y Documento; no incluye los
+                    archivos.
+                  </span>
+                </span>
+              </label>
+            )}
+            {!['summary', 'mentors', 'mentees', 'mentorships', 'sessions'].some(
+              (key) => exportOptions[key as keyof ExportOptions],
+            ) && (
+              <p className="text-sm text-muted-foreground">
+                Selecciona al menos una hoja para descargar.
+              </p>
+            )}
+
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 type="button"
                 onClick={exportExcel}
-                disabled={isExporting}
+                disabled={
+                  isExporting ||
+                  ![
+                    'summary',
+                    'mentors',
+                    'mentees',
+                    'mentorships',
+                    'sessions',
+                  ].some((key) => exportOptions[key as keyof ExportOptions])
+                }
               >
                 <Download aria-hidden="true" />
                 {isExporting ? 'Generando...' : 'Descargar Excel'}
@@ -2083,7 +2126,7 @@ function FieldLabel({
   children: ReactNode;
 }) {
   return (
-    <label className="grid gap-1.5">
+    <label className="grid min-w-0 gap-1.5">
       <span className="text-sm font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
@@ -2134,6 +2177,38 @@ function SummaryPanel({
   );
 }
 
+function SpecialtiesInput({
+  expertise,
+  onChange,
+}: {
+  expertise: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  return (
+    <Input
+      value={editing ? draft : expertise.join(', ')}
+      placeholder="Ej. Finanzas, ventas, gestión"
+      maxLength={150}
+      onFocus={() => {
+        setDraft(expertise.join(', '));
+        setEditing(true);
+      }}
+      onBlur={() => setEditing(false)}
+      onChange={(event) => {
+        setDraft(event.target.value);
+        onChange(
+          event.target.value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean),
+        );
+      }}
+    />
+  );
+}
+
 function MentorCard({
   mentor,
   stats,
@@ -2171,8 +2246,10 @@ function MentorCard({
         </p>
         <div className="mt-5 flex flex-col gap-4 sm:flex-row">
           <div className="flex shrink-0 flex-col items-start gap-3">
-            <Avatar name={mentor.name} photo={mentor.photo} size="lg" />
-            <UploadLabel icon={<Camera />} label="Foto">
+            <UploadLabel
+              icon={<Camera />}
+              label={mentor.photo ? 'Cambiar foto' : 'Añadir foto'}
+            >
               <input
                 type="file"
                 accept="image/png,image/jpeg"
@@ -2183,8 +2260,9 @@ function MentorCard({
           </div>
           <div className="grid min-w-0 flex-1 gap-3">
             <div className="grid gap-3 md:grid-cols-2">
-              <FieldLabel label="Nombre">
+              <FieldLabel label="Nombre completo">
                 <Input
+                  maxLength={100}
                   value={mentor.name}
                   onChange={(event) =>
                     updateMentor(mentor.id, { name: event.target.value })
@@ -2216,28 +2294,23 @@ function MentorCard({
               </FieldLabel>
               <FieldLabel label="Teléfono">
                 <Input
+                  type="tel"
+                  maxLength={30}
                   value={mentor.phone}
                   onChange={(event) =>
                     updateMentor(mentor.id, { phone: event.target.value })
                   }
-                  placeholder="+56"
+                  placeholder="Ej. +56 9 1234 5678"
                 />
               </FieldLabel>
             </div>
             <FieldLabel label="Especialidades">
-              <Input
-                value={mentor.expertise.join(', ')}
-                onChange={(event) =>
-                  updateMentor(mentor.id, {
-                    expertise: event.target.value
-                      .split(',')
-                      .map((item) => item.trim())
-                      .filter(Boolean),
-                  })
-                }
+              <SpecialtiesInput
+                expertise={mentor.expertise}
+                onChange={(expertise) => updateMentor(mentor.id, { expertise })}
               />
             </FieldLabel>
-            <FieldLabel label="Bio">
+            <FieldLabel label="Sobre mí">
               <Textarea
                 value={mentor.bio}
                 onChange={(event) =>
@@ -2295,8 +2368,10 @@ function MenteeCard({
         </p>
         <div className="mt-5 flex flex-col gap-4 sm:flex-row">
           <div className="flex shrink-0 flex-col items-start gap-3">
-            <Avatar name={mentee.name} photo={mentee.photo} size="lg" />
-            <UploadLabel icon={<Camera />} label="Foto">
+            <UploadLabel
+              icon={<Camera />}
+              label={mentee.photo ? 'Cambiar foto' : 'Añadir foto'}
+            >
               <input
                 type="file"
                 accept="image/png,image/jpeg"
@@ -2307,8 +2382,9 @@ function MenteeCard({
           </div>
           <div className="grid min-w-0 flex-1 gap-3">
             <div className="grid gap-3 md:grid-cols-2">
-              <FieldLabel label="Nombre">
+              <FieldLabel label="Nombre completo">
                 <Input
+                  maxLength={100}
                   value={mentee.name}
                   onChange={(event) =>
                     updateMentee(mentee.id, { name: event.target.value })
@@ -2317,6 +2393,7 @@ function MenteeCard({
               </FieldLabel>
               <FieldLabel label="Emprendimiento">
                 <Input
+                  maxLength={150}
                   value={mentee.venture}
                   onChange={(event) =>
                     updateMentee(mentee.id, { venture: event.target.value })
@@ -2325,8 +2402,10 @@ function MenteeCard({
               </FieldLabel>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
-              <FieldLabel label="Etapa">
+              <FieldLabel label="Etapa del emprendimiento">
                 <Input
+                  placeholder="Ej. Idea, en marcha o crecimiento"
+                  maxLength={150}
                   value={mentee.stage}
                   onChange={(event) =>
                     updateMentee(mentee.id, { stage: event.target.value })
@@ -2346,15 +2425,17 @@ function MenteeCard({
               </FieldLabel>
               <FieldLabel label="Teléfono">
                 <Input
+                  type="tel"
+                  maxLength={30}
                   value={mentee.phone}
                   onChange={(event) =>
                     updateMentee(mentee.id, { phone: event.target.value })
                   }
-                  placeholder="+56"
+                  placeholder="Ej. +56 9 1234 5678"
                 />
               </FieldLabel>
             </div>
-            <FieldLabel label="Necesidad principal">
+            <FieldLabel label="¿En qué necesita apoyo?">
               <Textarea
                 value={mentee.need}
                 onChange={(event) =>
@@ -2425,6 +2506,11 @@ function MentorshipCard({
               {mentorship.month || 'Mes pendiente'}
             </span>
           </div>
+          {mentorship.service && (
+            <p className="mb-3 text-sm text-muted-foreground">
+              {mentorship.service}
+            </p>
+          )}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <PersonLine person={mentor} fallback="Mentor por asignar" />
             <span className="hidden text-muted-foreground sm:block">→</span>
@@ -2447,158 +2533,232 @@ function MentorshipCard({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 xl:grid-cols-4">
-        <FieldLabel label="Mentor">
-          <NativeSelect
-            value={mentorship.mentorId}
-            onChange={(event) =>
-              updateMentorship(mentorship.id, { mentorId: event.target.value })
-            }
-            disabled={!canManage}
-            className="w-full"
-            aria-label="Mentor asignado"
-          >
-            {mentors.map((item) => (
-              <NativeSelectOption key={item.id} value={item.id}>
-                {item.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </FieldLabel>
-        <FieldLabel label="Mentoreado">
-          <NativeSelect
-            value={mentorship.menteeId}
-            onChange={(event) =>
-              updateMentorship(mentorship.id, { menteeId: event.target.value })
-            }
-            disabled={!canManage}
-            className="w-full"
-            aria-label="Mentoreado asignado"
-          >
-            {mentees.map((item) => (
-              <NativeSelectOption key={item.id} value={item.id}>
-                {item.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </FieldLabel>
-        <FieldLabel label="Estado">
-          <NativeSelect
-            value={mentorship.status}
-            onChange={(event) =>
-              updateMentorship(mentorship.id, {
-                status: event.target.value as MentorshipStatus,
-              })
-            }
-            disabled={!canEdit}
-            className="w-full"
-            aria-label="Estado"
-          >
-            {MENTORSHIP_STATUSES.map((status) => (
-              <NativeSelectOption key={status} value={status}>
-                {status}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </FieldLabel>
-        <FieldLabel label="Horas">
-          <Input
-            type="number"
-            min="0"
-            step="0.5"
-            value={mentorship.hours}
-            disabled={!canEdit}
-            onChange={(event) =>
-              updateMentorship(mentorship.id, {
-                hours: Number(event.target.value),
-              })
-            }
-          />
-        </FieldLabel>
+      {canEdit ? (
+        <>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <FieldLabel label="Estado">
+              <NativeSelect
+                value={mentorship.status}
+                onChange={(event) =>
+                  updateMentorship(mentorship.id, {
+                    status: event.target.value as MentorshipStatus,
+                  })
+                }
+                disabled={!canEdit}
+                className="w-full"
+                aria-label="Estado"
+              >
+                {MENTORSHIP_STATUSES.map((status) => (
+                  <NativeSelectOption key={status} value={status}>
+                    {status}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </FieldLabel>
+            <FieldLabel label="Horas acumuladas">
+              <Input
+                type="number"
+                min="0"
+                step="0.5"
+                value={mentorship.hours}
+                disabled={!canEdit}
+                onChange={(event) =>
+                  updateMentorship(mentorship.id, {
+                    hours: Number(event.target.value),
+                  })
+                }
+              />
+            </FieldLabel>
+          </div>
+          <div className="mt-3">
+            <FieldLabel label="Objetivo de esta mentoría">
+              <Textarea
+                placeholder="Ej. Preparar un presupuesto mensual"
+                value={mentorship.goal}
+                disabled={!canEdit}
+                onChange={(event) =>
+                  updateMentorship(mentorship.id, { goal: event.target.value })
+                }
+              />
+            </FieldLabel>
+          </div>
+          <details className="mt-4 rounded-xl border border-border p-4">
+            <summary className="cursor-pointer text-sm font-medium text-primary">
+              Datos de la mentoría
+            </summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <FieldLabel label="Servicio">
+                  <NativeSelect
+                    value={mentorship.service}
+                    onChange={(event) =>
+                      updateMentorship(mentorship.id, {
+                        service: event.target.value,
+                      })
+                    }
+                    disabled={!canEdit}
+                    className="w-full"
+                    aria-label="Servicio entregado"
+                  >
+                    <NativeSelectOption value="">
+                      Sin servicio
+                    </NativeSelectOption>
+                    {SERVICES.map((service) => (
+                      <NativeSelectOption key={service} value={service}>
+                        {service}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </FieldLabel>
+              </div>
+              <FieldLabel label="Mes de inicio">
+                <NativeSelect
+                  value={mentorship.month}
+                  disabled={!canEdit}
+                  className="w-full"
+                  onChange={(event) =>
+                    updateMentorship(mentorship.id, {
+                      month: event.target.value,
+                    })
+                  }
+                >
+                  <NativeSelectOption value="">Sin definir</NativeSelectOption>
+                  {MONTHS.map((month) => (
+                    <NativeSelectOption key={month} value={month}>
+                      {month}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </FieldLabel>
+              <FieldLabel label="Espacio utilizado">
+                <Input
+                  value={mentorship.space}
+                  disabled={!canEdit}
+                  onChange={(event) =>
+                    updateMentorship(mentorship.id, {
+                      space: event.target.value,
+                    })
+                  }
+                />
+              </FieldLabel>
+              {canManage && (
+                <>
+                  <FieldLabel label="Mentor">
+                    <NativeSelect
+                      value={mentorship.mentorId}
+                      onChange={(event) =>
+                        updateMentorship(mentorship.id, {
+                          mentorId: event.target.value,
+                        })
+                      }
+                      disabled={!canManage}
+                      className="w-full"
+                      aria-label="Mentor asignado"
+                    >
+                      {mentors.map((item) => (
+                        <NativeSelectOption key={item.id} value={item.id}>
+                          {item.name}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  </FieldLabel>
+                  <FieldLabel label="Mentoreado">
+                    <NativeSelect
+                      value={mentorship.menteeId}
+                      onChange={(event) =>
+                        updateMentorship(mentorship.id, {
+                          menteeId: event.target.value,
+                        })
+                      }
+                      disabled={!canManage}
+                      className="w-full"
+                      aria-label="Mentoreado asignado"
+                    >
+                      {mentees.map((item) => (
+                        <NativeSelectOption key={item.id} value={item.id}>
+                          {item.name}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  </FieldLabel>
+                </>
+              )}
+            </div>
+          </details>
+        </>
+      ) : (
+        <div className="mt-5 space-y-2 rounded-xl bg-zinc-50 p-4 text-sm">
+          <p>
+            <span className="font-medium">Objetivo: </span>
+            {mentorship.goal || 'Aún no se ha definido.'}
+          </p>
+          <p className="text-muted-foreground">
+            {formatHours(mentorship.hours)} horas acumuladas
+            {mentorship.space ? ` · ${mentorship.space}` : ''}
+          </p>
+        </div>
+      )}
+      {canManage && (
+        <details className="mt-3 rounded-xl border border-border p-4">
+          <summary className="cursor-pointer text-sm font-medium text-primary">
+            Seguimiento administrativo
+          </summary>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <FieldLabel label="Formalización">
+              <CheckSelect
+                value={mentorship.formalization}
+                disabled={!canManage}
+                onChange={(value) =>
+                  updateMentorship(mentorship.id, { formalization: value })
+                }
+              />
+            </FieldLabel>
+            <FieldLabel label="Planificación SIR">
+              <CheckSelect
+                value={mentorship.planningSir}
+                disabled={!canManage}
+                onChange={(value) =>
+                  updateMentorship(mentorship.id, { planningSir: value })
+                }
+              />
+            </FieldLabel>
+            <FieldLabel label="Ejecución SIR">
+              <CheckSelect
+                value={mentorship.executionSir}
+                disabled={!canManage}
+                onChange={(value) =>
+                  updateMentorship(mentorship.id, { executionSir: value })
+                }
+              />
+            </FieldLabel>
+            <FieldLabel label="Fecha de pago">
+              <Input
+                type="date"
+                value={mentorship.paidAt}
+                disabled={!canManage}
+                onChange={(event) =>
+                  updateMentorship(mentorship.id, {
+                    paidAt: event.target.value,
+                  })
+                }
+              />
+            </FieldLabel>
+          </div>
+        </details>
+      )}
+      <div className="mt-6 border-t pt-5">
+        <h3 className="font-semibold">Sesiones</h3>
+        {canEdit && mentorship.status !== 'En proceso' && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Las sesiones están en modo consulta. Para actualizarlas, cambia el
+            estado de la mentoría a En proceso.
+          </p>
+        )}
       </div>
-
-      <div className="mt-3 grid gap-3 xl:grid-cols-[1.2fr_1fr_1fr_1fr]">
-        <FieldLabel label="Servicio">
-          <NativeSelect
-            value={mentorship.service}
-            onChange={(event) =>
-              updateMentorship(mentorship.id, { service: event.target.value })
-            }
-            disabled={!canEdit}
-            className="w-full"
-            aria-label="Servicio entregado"
-          >
-            <NativeSelectOption value="">Sin servicio</NativeSelectOption>
-            {SERVICES.map((service) => (
-              <NativeSelectOption key={service} value={service}>
-                {service}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </FieldLabel>
-        <FieldLabel label="Formalización">
-          <CheckSelect
-            value={mentorship.formalization}
-            disabled={!canManage}
-            onChange={(value) =>
-              updateMentorship(mentorship.id, { formalization: value })
-            }
-          />
-        </FieldLabel>
-        <FieldLabel label="Planificación SIR">
-          <CheckSelect
-            value={mentorship.planningSir}
-            disabled={!canManage}
-            onChange={(value) =>
-              updateMentorship(mentorship.id, { planningSir: value })
-            }
-          />
-        </FieldLabel>
-        <FieldLabel label="Ejecución SIR">
-          <CheckSelect
-            value={mentorship.executionSir}
-            disabled={!canManage}
-            onChange={(value) =>
-              updateMentorship(mentorship.id, { executionSir: value })
-            }
-          />
-        </FieldLabel>
-      </div>
-
-      <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_1fr_2fr]">
-        <FieldLabel label="Espacio utilizado">
-          <Input
-            value={mentorship.space}
-            disabled={!canEdit}
-            onChange={(event) =>
-              updateMentorship(mentorship.id, { space: event.target.value })
-            }
-          />
-        </FieldLabel>
-        <FieldLabel label="Pagada en">
-          <Input
-            type="date"
-            value={mentorship.paidAt}
-            disabled={!canManage}
-            onChange={(event) =>
-              updateMentorship(mentorship.id, { paidAt: event.target.value })
-            }
-          />
-        </FieldLabel>
-        <FieldLabel label="Objetivo / foco">
-          <Input
-            value={mentorship.goal}
-            disabled={!canEdit}
-            onChange={(event) =>
-              updateMentorship(mentorship.id, { goal: event.target.value })
-            }
-          />
-        </FieldLabel>
-      </div>
-
       {mentorship.sessions.length === 0 && (
         <p className="mt-4 text-sm text-amber-800">
-          Guarda la mentoría para comenzar a registrar sus seis sesiones.
+          No se pudieron cargar las sesiones. Pulsa Actualizar en la barra
+          superior.
         </p>
       )}
       <div className="mt-5 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
@@ -2646,9 +2806,12 @@ function SessionTile({
     >
       <summary className="cursor-pointer text-sm font-semibold">
         Sesión {session.number}
-        <span className="ml-3 font-normal text-muted-foreground">
+        <Badge
+          variant="outline"
+          className={cn('ml-3', sessionTones[session.status])}
+        >
           {session.status}
-        </span>
+        </Badge>
         <p className="mt-1 text-sm font-normal text-muted-foreground">
           {session.date || 'Sin fecha'} ·{' '}
           {session.photo || session.document
@@ -2657,95 +2820,118 @@ function SessionTile({
         </p>
       </summary>
       <div className="mt-4 border-t pt-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <Badge variant="outline" className={sessionTones[session.status]}>
-            Sesión {session.number}
-          </Badge>
-          <NativeSelect
-            value={session.status}
-            onChange={(event) => {
-              const nextStatus = event.target.value as SessionStatus;
-              updateSession(mentorshipId, session.number, {
-                status: nextStatus,
-                date:
-                  nextStatus === 'Realizada' && !session.date
-                    ? todayIso()
-                    : session.date,
-              });
-            }}
-            disabled={!canEdit}
-            aria-label={`Estado sesión ${session.number}`}
-            className="w-36"
-            size="sm"
-          >
-            {SESSION_STATUSES.map((status) => (
-              <NativeSelectOption key={status} value={status}>
-                {status}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </div>
+        {canEdit ? (
+          <>
+            <div className="mb-3">
+              <FieldLabel label="Estado de la sesión">
+                <NativeSelect
+                  value={session.status}
+                  onChange={(event) => {
+                    const nextStatus = event.target.value as SessionStatus;
+                    updateSession(mentorshipId, session.number, {
+                      status: nextStatus,
+                      date:
+                        nextStatus === 'Realizada' && !session.date
+                          ? todayIso()
+                          : session.date,
+                    });
+                  }}
+                  disabled={!canEdit}
+                  aria-label={`Estado sesión ${session.number}`}
+                  className="w-full"
+                  size="sm"
+                >
+                  {SESSION_STATUSES.map((status) => (
+                    <NativeSelectOption key={status} value={status}>
+                      {status}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </FieldLabel>
+            </div>
 
-        <div className="grid gap-2">
-          <Input
-            type="date"
-            value={session.date}
-            disabled={!canEdit}
-            onChange={(event) =>
-              updateSession(mentorshipId, session.number, {
-                date: event.target.value,
-              })
-            }
-            aria-label={`Fecha sesión ${session.number}`}
-          />
-          <Textarea
-            value={session.summary}
-            disabled={!canEdit}
-            onChange={(event) =>
-              updateSession(mentorshipId, session.number, {
-                summary: event.target.value,
-              })
-            }
-            placeholder="Resumen de acuerdos"
-            className="min-h-20"
-            aria-label={`Resumen sesión ${session.number}`}
-          />
-        </div>
+            <div className="grid gap-2">
+              <FieldLabel label="Fecha de la sesión">
+                <Input
+                  type="date"
+                  value={session.date}
+                  disabled={!canEdit}
+                  onChange={(event) =>
+                    updateSession(mentorshipId, session.number, {
+                      date: event.target.value,
+                    })
+                  }
+                  aria-label={`Fecha sesión ${session.number}`}
+                />
+              </FieldLabel>
+              <FieldLabel label="Acuerdos y próximos pasos">
+                <Textarea
+                  value={session.summary}
+                  disabled={!canEdit}
+                  onChange={(event) =>
+                    updateSession(mentorshipId, session.number, {
+                      summary: event.target.value,
+                    })
+                  }
+                  placeholder="¿Qué se trabajó y qué queda pendiente?"
+                  className="min-h-20"
+                  aria-label={`Resumen sesión ${session.number}`}
+                />
+              </FieldLabel>
+            </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <UploadLabel icon={<Camera />} label="Foto" disabled={!canEdit}>
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              className="sr-only"
-              disabled={!canEdit}
-              onChange={(event) =>
-                handleSessionAttachment(
-                  mentorshipId,
-                  session.number,
-                  event,
-                  'photo',
-                )
-              }
-            />
-          </UploadLabel>
-          <UploadLabel icon={<Upload />} label="Documento" disabled={!canEdit}>
-            <input
-              type="file"
-              accept="application/pdf"
-              className="sr-only"
-              disabled={!canEdit}
-              onChange={(event) =>
-                handleSessionAttachment(
-                  mentorshipId,
-                  session.number,
-                  event,
-                  'document',
-                )
-              }
-            />
-          </UploadLabel>
-        </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <UploadLabel
+                icon={<Camera />}
+                label={session.photo ? 'Cambiar foto' : 'Añadir foto'}
+                disabled={!canEdit}
+              >
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  className="sr-only"
+                  disabled={!canEdit}
+                  onChange={(event) =>
+                    handleSessionAttachment(
+                      mentorshipId,
+                      session.number,
+                      event,
+                      'photo',
+                    )
+                  }
+                />
+              </UploadLabel>
+              <UploadLabel
+                icon={<Upload />}
+                label={session.document ? 'Cambiar PDF' : 'Añadir PDF'}
+                disabled={!canEdit}
+              >
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="sr-only"
+                  disabled={!canEdit}
+                  onChange={(event) =>
+                    handleSessionAttachment(
+                      mentorshipId,
+                      session.number,
+                      event,
+                      'document',
+                    )
+                  }
+                />
+              </UploadLabel>
+            </div>
+
+            <p className="mt-2 text-xs text-muted-foreground">
+              Foto JPG o PNG (máx. 2 MB) · PDF (máx. 5 MB).
+            </p>
+          </>
+        ) : (
+          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+            {session.summary || 'Aún no hay acuerdos registrados.'}
+          </p>
+        )}
 
         {session.photo || session.document ? (
           <div className="mt-3 grid gap-2">
