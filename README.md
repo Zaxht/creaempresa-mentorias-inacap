@@ -15,6 +15,10 @@ Las altas se guardan con **Crear**. Las fichas muestran un perfil de lectura con
 
 El acceso requiere una cuenta del programa creada por el administrador. Se utiliza el correo y la contraseña de Supabase.
 
+En **Excel** se eligen las hojas, se revisan sus datos en pestañas y se descarga el archivo con el mismo contenido. La vista previa incluye todas las columnas y pagina las filas; el archivo descarga todos los registros del alcance de la cuenta. El formato incorpora logo INACAP, encabezados rojos, fechas de Excel, filtros y títulos de impresión. La opción de evidencias agrega sus nombres, sin copiar archivos privados.
+
+El entorno académico contiene perfiles y emprendimientos ficticios con correos de contacto `@demo.example.com`. Los informes que incluyen esos perfiles se identifican como datos de ejemplo. El correo de contacto de una ficha es independiente del utilizado para iniciar sesión.
+
 ## Tecnologías
 
 React, TypeScript y Vite para la interfaz; Supabase Auth, PostgreSQL y Storage para autenticación, datos y archivos; Netlify para alojamiento y GitHub Actions para despliegue automático.

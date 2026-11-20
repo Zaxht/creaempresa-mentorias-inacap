@@ -5,13 +5,13 @@ import { PersonFields } from '@/components/person-fields';
 import { ProgramGraphic } from '@/components/program-graphic';
 import { MentorshipWorkspace } from '@/components/mentorship-workspace';
 import { PeopleWorkspace, PersonProfile } from '@/components/people-workspace';
+import { ExportWorkspace } from '@/components/export-workspace';
 
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   CalendarDays,
   ClipboardCheck,
   Clock3,
-  Download,
   FileSpreadsheet,
   FolderOpen,
   LayoutDashboard,
@@ -33,7 +33,6 @@ import {
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   ProgramSelect as NativeSelect,
   ProgramOption as NativeSelectOption,
@@ -54,15 +53,6 @@ import {
 } from '@/lib/mentorias/changes';
 import { getMetrics } from '@/lib/mentorias/metrics';
 import {
-  imageToBase64,
-  downloadBlob,
-  addSummarySheet,
-  addMentorsSheet,
-  addMenteesSheet,
-  addMentorshipsSheet,
-  addSessionsSheet,
-} from '@/lib/mentorias/reports';
-import {
   MONTHS,
   MENTORSHIP_STATUSES,
   SERVICES,
@@ -75,20 +65,10 @@ import {
   type Mentee,
   type Mentorship,
   type AppState,
-  type ExportOptions,
 } from '@/lib/mentorias/domain';
 
 const STORAGE_KEY = 'creaempresa-mentorias-app-v2';
 const LOGO_PATH = '/logoinacap.png';
-
-const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
-  summary: true,
-  mentors: true,
-  mentees: true,
-  mentorships: true,
-  sessions: true,
-  attachments: true,
-};
 
 const DEFAULT_MENTORS: Mentor[] = [
   {
@@ -280,20 +260,6 @@ function readFile(file: File): Promise<Attachment> {
   });
 }
 
-function sanitizeFilename(name: string) {
-  const cleaned = name
-    .trim()
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .split('')
-    .filter((char) => char.charCodeAt(0) >= 32)
-    .join('')
-    .replace(/\.xlsx$/i, '')
-    .replace(/\s+/g, '-')
-    .toLowerCase();
-
-  return cleaned || 'monitoreo-mentorias-2026';
-}
-
 export default function Home() {
   return (
     <MentoriasAccess>
@@ -340,12 +306,6 @@ function WorkspaceView({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [saveWarning, setSaveWarning] = useState('');
-  const [exportOptions, setExportOptions] = useState<ExportOptions>(
-    DEFAULT_EXPORT_OPTIONS,
-  );
-  const [fileName, setFileName] = useState('monitoreo-mentorias-2026');
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportMessage, setExportMessage] = useState('');
   const [newMentor, setNewMentor] = useState({
     name: '',
     expertise: '',
@@ -701,83 +661,6 @@ function WorkspaceView({
     setActiveView('mentorships');
   };
 
-  const exportExcel = async () => {
-    if (role === 'Mentoreado') return;
-    if (
-      !['summary', 'mentors', 'mentees', 'mentorships', 'sessions'].some(
-        (key) => exportOptions[key as keyof ExportOptions],
-      )
-    ) {
-      setExportMessage('Selecciona al menos una sección para exportar.');
-      return;
-    }
-    if (hasChanges) {
-      setExportMessage('Guarda los cambios antes de exportar.');
-      return;
-    }
-    setIsExporting(true);
-    setExportMessage('');
-
-    try {
-      const exportState = repository
-        ? (await repository.load()).state
-        : scopedState;
-      const ExcelJS = await import('exceljs');
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Crea Empresa';
-      workbook.created = new Date();
-      workbook.modified = new Date();
-      workbook.calcProperties.fullCalcOnLoad = true;
-
-      const logoBase64 = await imageToBase64(LOGO_PATH);
-      const logoId = logoBase64
-        ? workbook.addImage({ base64: logoBase64, extension: 'png' })
-        : undefined;
-
-      if (exportOptions.summary) {
-        addSummarySheet(workbook, logoId, exportState);
-      }
-
-      if (exportOptions.mentors) {
-        addMentorsSheet(workbook, logoId, exportState);
-      }
-
-      if (exportOptions.mentees) {
-        addMenteesSheet(workbook, logoId, exportState);
-      }
-
-      if (exportOptions.mentorships) {
-        addMentorshipsSheet(workbook, logoId, exportState);
-      }
-
-      if (exportOptions.sessions) {
-        addSessionsSheet(
-          workbook,
-          logoId,
-          exportState,
-          exportOptions.attachments,
-        );
-      }
-
-      if (workbook.worksheets.length === 0) {
-        addSummarySheet(workbook, logoId, exportState);
-      }
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      downloadBlob(
-        new Blob([buffer as BlobPart], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        }),
-        `${sanitizeFilename(fileName)}.xlsx`,
-      );
-      setExportMessage('Excel descargado.');
-    } catch {
-      setExportMessage('No se pudo generar el Excel en este navegador.');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   return (
     <main className="workspace min-h-screen text-foreground">
       <div className="workspace-topbar">
@@ -1040,16 +923,17 @@ function WorkspaceView({
               />
             ) : null}
 
-            {activeView === 'export' ? (
-              <ExportView
-                metrics={metrics}
-                exportOptions={exportOptions}
-                setExportOptions={setExportOptions}
-                fileName={fileName}
-                setFileName={setFileName}
-                isExporting={isExporting}
-                exportMessage={exportMessage}
-                exportExcel={exportExcel}
+            {activeView === 'export' && role !== 'Mentoreado' ? (
+              <ExportWorkspace
+                state={scopedState}
+                hasUnsavedChanges={hasChanges}
+                heading={
+                  <PageHeading
+                    eyebrow="Informes"
+                    title="Excel a tu medida"
+                    body="Elige qué compartir, revisa el resultado y llévalo contigo."
+                  />
+                }
               />
             ) : null}
           </section>
@@ -1357,175 +1241,6 @@ function DashboardView({
   );
 }
 
-function ExportView({
-  metrics,
-  exportOptions,
-  setExportOptions,
-  fileName,
-  setFileName,
-  isExporting,
-  exportMessage,
-  exportExcel,
-}: {
-  metrics: ReturnType<typeof getMetrics>;
-  exportOptions: ExportOptions;
-  setExportOptions: (value: ExportOptions) => void;
-  fileName: string;
-  setFileName: (value: string) => void;
-  isExporting: boolean;
-  exportMessage: string;
-  exportExcel: () => void;
-}) {
-  const options: Array<{
-    key: keyof ExportOptions;
-    label: string;
-    detail: string;
-  }> = [
-    {
-      key: 'summary',
-      label: 'Resumen',
-      detail: 'Indicadores y avance general',
-    },
-    { key: 'mentors', label: 'Mentores', detail: 'Perfiles y especialidades' },
-    { key: 'mentees', label: 'Mentoreados', detail: 'Fichas de participantes' },
-    { key: 'mentorships', label: 'Mentorías', detail: 'Estado, horas y SIR' },
-    { key: 'sessions', label: 'Sesiones', detail: 'Detalle sesión por sesión' },
-  ];
-
-  return (
-    <div className="grid gap-5">
-      <PageHeading
-        eyebrow="Salida"
-        title="Exportación Excel"
-        body="Elige qué incluir y descarga un informe listo para compartir."
-      />
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="surface-card p-5">
-          <div className="grid gap-4">
-            <FieldLabel label="Nombre del archivo">
-              <Input
-                value={fileName}
-                onChange={(event) => setFileName(event.target.value)}
-                placeholder="monitoreo-mentorias-2026"
-              />
-            </FieldLabel>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              {options.map((option) => (
-                <label
-                  key={option.key}
-                  aria-label={option.label}
-                  className="flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/35 p-3 transition-colors hover:bg-muted"
-                >
-                  <input
-                    type="checkbox"
-                    checked={exportOptions[option.key]}
-                    onChange={(event) =>
-                      setExportOptions({
-                        ...exportOptions,
-                        [option.key]: event.target.checked,
-                      })
-                    }
-                    className="mt-1 size-4 accent-primary"
-                  />
-                  <span>
-                    <span className="block text-sm font-semibold">
-                      {option.label}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {option.detail}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            {exportOptions.sessions && (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-zinc-50 p-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4 accent-primary"
-                  checked={exportOptions.attachments}
-                  onChange={(event) =>
-                    setExportOptions({
-                      ...exportOptions,
-                      attachments: event.target.checked,
-                    })
-                  }
-                />
-                <span>
-                  Incluir nombres de evidencias en Sesiones
-                  <span className="block text-xs text-muted-foreground">
-                    Añade las columnas Foto y Documento; no incluye los
-                    archivos.
-                  </span>
-                </span>
-              </label>
-            )}
-            {!['summary', 'mentors', 'mentees', 'mentorships', 'sessions'].some(
-              (key) => exportOptions[key as keyof ExportOptions],
-            ) && (
-              <p className="text-sm text-muted-foreground">
-                Selecciona al menos una hoja para descargar.
-              </p>
-            )}
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                type="button"
-                onClick={exportExcel}
-                disabled={
-                  isExporting ||
-                  ![
-                    'summary',
-                    'mentors',
-                    'mentees',
-                    'mentorships',
-                    'sessions',
-                  ].some((key) => exportOptions[key as keyof ExportOptions])
-                }
-              >
-                <Download aria-hidden="true" />
-                {isExporting ? 'Generando...' : 'Descargar Excel'}
-              </Button>
-              {exportMessage ? (
-                <span className="text-sm font-medium text-muted-foreground">
-                  {exportMessage}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        <div className="report-preview rounded-2xl bg-zinc-950 p-6 text-white">
-          <div className="mb-6 flex items-center justify-between">
-            <Image
-              unoptimized
-              width={96}
-              height={96}
-              src={LOGO_PATH}
-              alt="INACAP"
-              className="h-12 w-auto"
-            />
-            <Badge className="bg-white text-zinc-900">XLSX</Badge>
-          </div>
-          <h2 className="text-xl font-semibold">Monitoreo de mentorías 2026</h2>
-          <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-            <ExcelPreviewMetric label="Mentorías" value={metrics.mentorships} />
-            <ExcelPreviewMetric label="Mentores" value={metrics.mentors} />
-            <ExcelPreviewMetric label="Mentoreados" value={metrics.mentees} />
-            <ExcelPreviewMetric
-              label="Evidencias"
-              value={metrics.evidenceCount}
-            />
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function MetricCard({
   icon,
   label,
@@ -1790,21 +1505,6 @@ function EmptyState({ title, body }: { title: string; body: string }) {
       <FolderOpen className="mx-auto mb-2 size-8 text-muted-foreground" />
       <p className="font-semibold">{title}</p>
       <p className="text-sm text-muted-foreground">{body}</p>
-    </div>
-  );
-}
-
-function ExcelPreviewMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="rounded-lg bg-white/10 p-3">
-      <p className="text-xs font-semibold uppercase text-zinc-300">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
