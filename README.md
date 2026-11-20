@@ -15,6 +15,8 @@ Las altas se guardan con **Crear**. Las fichas muestran un perfil de lectura con
 
 El acceso requiere una cuenta del programa creada por el administrador. Se utiliza el correo y la contraseña de Supabase.
 
+El **Resumen** muestra el avance de las seis sesiones por mentoría, los estados y las sesiones realizadas en las últimas seis semanas. Prioriza fechas vencidas sin actualizar, continuidad o derivación por revisar, cierres pendientes y mentorías sin próxima fecha. Los avisos y la agenda abren la mentoría; los estados filtran el listado. Las señales usan la fecha de Chile y los registros actuales, sin modificar datos automáticamente.
+
 En **Excel** se eligen las hojas, se revisan sus datos en pestañas y se descarga el archivo con el mismo contenido. La vista previa incluye todas las columnas y pagina las filas; el archivo descarga todos los registros del alcance de la cuenta. El formato incorpora logo INACAP, encabezados rojos, fechas de Excel, filtros y títulos de impresión. La opción de evidencias agrega sus nombres, sin copiar archivos privados.
 
 El entorno académico contiene perfiles y emprendimientos ficticios con correos de contacto `@demo.example.com`. Los informes que incluyen esos perfiles se identifican como datos de ejemplo. El correo de contacto de una ficha es independiente del utilizado para iniciar sesión.

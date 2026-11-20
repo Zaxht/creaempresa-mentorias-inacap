@@ -6,6 +6,7 @@ import { ProgramGraphic } from '@/components/program-graphic';
 import { MentorshipWorkspace } from '@/components/mentorship-workspace';
 import { PeopleWorkspace, PersonProfile } from '@/components/people-workspace';
 import { ExportWorkspace } from '@/components/export-workspace';
+import { DashboardWorkspace } from '@/components/dashboard-workspace';
 
 import { useEffect, useState, type ReactNode } from 'react';
 import {
@@ -13,9 +14,7 @@ import {
   ClipboardCheck,
   Clock3,
   FileSpreadsheet,
-  FolderOpen,
   LayoutDashboard,
-  Paperclip,
   User,
   UserCheck,
   Users,
@@ -31,7 +30,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   ProgramSelect as NativeSelect,
@@ -54,7 +52,6 @@ import {
 import { getMetrics } from '@/lib/mentorias/metrics';
 import {
   MONTHS,
-  MENTORSHIP_STATUSES,
   SERVICES,
   type Role,
   type View,
@@ -153,15 +150,6 @@ const DEFAULT_STATE: AppState = {
   ],
 };
 
-const statusTones: Record<MentorshipStatus, string> = {
-  Suspendida: 'border-rose-200 bg-rose-50 text-rose-700',
-  'En proceso': 'border-sky-200 bg-sky-50 text-sky-700',
-  Terminada: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  'No corresponde': 'border-zinc-200 bg-zinc-50 text-zinc-600',
-  'Esperando derivación': 'border-amber-200 bg-amber-50 text-amber-700',
-  Derivada: 'border-violet-200 bg-violet-50 text-violet-700',
-};
-
 function createSessions(): SessionRecord[] {
   return Array.from({ length: 6 }, (_, index) => ({
     number: index + 1,
@@ -225,24 +213,6 @@ function normalizeState(state: Partial<AppState>): AppState {
   }));
 
   return { mentors, mentees, mentorships };
-}
-
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-
-  if (parts.length === 0) {
-    return 'CE';
-  }
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-}
-
-function formatHours(value: number) {
-  return value.toLocaleString('es-CL', { maximumFractionDigits: 1 });
 }
 
 function readFile(file: File): Promise<Attachment> {
@@ -459,6 +429,14 @@ function WorkspaceView({
     setSearch('');
     setStatusFilter('Todos');
     setActiveView('mentorships');
+  };
+
+  const browseMentorships = (status?: MentorshipStatus) => {
+    setMentorshipToOpen(null);
+    setSearch('');
+    setStatusFilter(status ?? 'Todos');
+    setActiveView('mentorships');
+    window.scrollTo({ top: 0 });
   };
 
   const saveMentorship = async (record: Mentorship) => {
@@ -791,12 +769,18 @@ function WorkspaceView({
 
           <section className="workspace-content min-w-0">
             {activeView === 'dashboard' ? (
-              <DashboardView
-                metrics={metrics}
+              <DashboardWorkspace
                 state={state}
-                newMentorship={newMentorship}
-                setNewMentorship={setNewMentorship}
-                addMentorship={addMentorship}
+                onOpenMentorship={openMentorship}
+                onBrowseMentorships={browseMentorships}
+                createAction={
+                  <NewMentorshipForm
+                    state={state}
+                    newMentorship={newMentorship}
+                    setNewMentorship={setNewMentorship}
+                    addMentorship={addMentorship}
+                  />
+                }
               />
             ) : null}
 
@@ -1077,193 +1061,6 @@ function NewMentorshipForm({
   );
 }
 
-function DashboardView({
-  metrics,
-  state,
-  newMentorship,
-  setNewMentorship,
-  addMentorship,
-}: {
-  metrics: ReturnType<typeof getMetrics>;
-  state: AppState;
-  newMentorship: {
-    mentorId: string;
-    menteeId: string;
-    month: string;
-    service: string;
-  };
-  setNewMentorship: (value: {
-    mentorId: string;
-    menteeId: string;
-    month: string;
-    service: string;
-  }) => void;
-  addMentorship: () => Promise<void>;
-}) {
-  const attentionItems = state.mentorships.filter((mentorship) =>
-    ['Suspendida', 'Esperando derivación', 'Derivada'].includes(
-      mentorship.status,
-    ),
-  );
-
-  return (
-    <div className="grid gap-6">
-      <PageHeading
-        eyebrow="Tu programa, de un vistazo"
-        title="Resumen del programa"
-        body="Revisa los avances y continúa acompañando a cada emprendimiento."
-      />
-      <section className="metric-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          icon={<ClipboardCheck />}
-          label="Mentorías"
-          value={String(metrics.mentorships)}
-          helper={`${metrics.activeMentorships} activas`}
-        />
-        <MetricCard
-          icon={<Users />}
-          label="Participantes"
-          value={`${metrics.mentors} / ${metrics.mentees}`}
-          helper="mentores / mentoreados"
-        />
-        <MetricCard
-          icon={<Clock3 />}
-          label="Horas"
-          value={formatHours(metrics.hours)}
-          helper={`${metrics.completedSessions} sesiones realizadas`}
-        />
-        <MetricCard
-          icon={<Paperclip />}
-          label="Evidencias"
-          value={String(metrics.evidenceCount)}
-          helper="fotos y documentos"
-        />
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="surface-card p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">El pulso del programa</h2>
-              <p className="text-sm text-muted-foreground">
-                Vista general por estado, servicio y avance de sesiones.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SummaryPanel
-              title="Estados"
-              items={MENTORSHIP_STATUSES.map((status) => ({
-                label: status,
-                count: state.mentorships.filter(
-                  (item) => item.status === status,
-                ).length,
-                tone: statusTones[status],
-              }))}
-              total={Math.max(1, state.mentorships.length)}
-            />
-            <SummaryPanel
-              title="Servicios"
-              items={SERVICES.map((service) => ({
-                label: service,
-                count: state.mentorships.filter(
-                  (item) => item.service === service,
-                ).length,
-                tone: 'border-teal-200 bg-teal-50 text-teal-700',
-              }))}
-              total={Math.max(1, state.mentorships.length)}
-            />
-          </div>
-        </div>
-
-        <div className="surface-card p-5">
-          <div className="mb-5 flex items-center gap-4">
-            <div
-              className="completion-ring"
-              style={{
-                background: `conic-gradient(#bf1830 ${metrics.completionRate}%, #f1e9ec 0)`,
-              }}
-            >
-              <span>{metrics.completionRate}%</span>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                Avance del programa
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Mentorías terminadas
-              </p>
-            </div>
-          </div>
-          <h2 className="text-lg font-semibold">Iniciar un acompañamiento</h2>
-          <p className="my-4 text-sm text-muted-foreground">
-            Vincula un mentor con un mentoreado. Al guardar se preparan las seis
-            sesiones.
-          </p>
-          <NewMentorshipForm
-            state={state}
-            newMentorship={newMentorship}
-            setNewMentorship={setNewMentorship}
-            addMentorship={addMentorship}
-          />
-        </div>
-      </section>
-
-      <section className="surface-card p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Requieren atención</h2>
-          <Badge variant="outline">{attentionItems.length}</Badge>
-        </div>
-        <div className="grid gap-3 lg:grid-cols-2">
-          {attentionItems.length ? (
-            attentionItems.map((mentorship) => (
-              <CompactMentorshipCard
-                key={mentorship.id}
-                mentorship={mentorship}
-                mentor={state.mentors.find(
-                  (mentor) => mentor.id === mentorship.mentorId,
-                )}
-                mentee={state.mentees.find(
-                  (mentee) => mentee.id === mentorship.menteeId,
-                )}
-              />
-            ))
-          ) : (
-            <EmptyState
-              title="Sin estados que requieran atención"
-              body="No hay mentorías suspendidas ni pendientes de derivación."
-            />
-          )}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  helper,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  helper: string;
-}) {
-  return (
-    <article className="metric-card">
-      <div className="metric-caption">
-        <span>{label}</span>
-        <span aria-hidden="true">{icon}</span>
-      </div>
-      <p className="metric-value">{value}</p>
-      <p className="metric-helper">{helper}</p>
-    </article>
-  );
-}
-
 function PageHeading({
   eyebrow,
   title,
@@ -1333,178 +1130,5 @@ function FieldLabel({
       </span>
       {children}
     </label>
-  );
-}
-
-function SummaryPanel({
-  title,
-  items,
-  total,
-}: {
-  title: string;
-  items: Array<{ label: string; count: number; tone: string }>;
-  total: number;
-}) {
-  return (
-    <div className="min-w-0 rounded-lg border border-border p-3">
-      <h3 className="mb-3 text-sm font-semibold">{title}</h3>
-      <div className="grid gap-3">
-        {items.map((item) => {
-          const percentage = Math.round((item.count / total) * 100);
-
-          return (
-            <div key={item.label} className="grid gap-1.5">
-              <div className="flex items-center justify-between gap-3">
-                <Badge
-                  variant="outline"
-                  className={cn('min-w-0 max-w-full shrink', item.tone)}
-                  title={item.label}
-                >
-                  <span className="truncate">{item.label}</span>
-                </Badge>
-                <span className="shrink-0 text-sm font-semibold tabular-nums">
-                  {item.count}
-                </span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary"
-                  style={{ width: `${percentage}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function CompactMentorshipCard({
-  mentorship,
-  mentor,
-  mentee,
-}: {
-  mentorship: Mentorship;
-  mentor?: Mentor;
-  mentee?: Mentee;
-}) {
-  const completed = mentorship.sessions.filter(
-    (session) => session.status === 'Realizada',
-  ).length;
-
-  return (
-    <article className="rounded-lg border border-border bg-muted/30 p-3">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <Badge variant="outline" className={statusTones[mentorship.status]}>
-          {mentorship.status}
-        </Badge>
-        <span className="text-sm font-semibold tabular-nums">
-          {completed}/6
-        </span>
-      </div>
-      <div className="grid gap-2">
-        <PersonLine person={mentor} fallback="Mentor por asignar" small />
-        <PersonLine person={mentee} fallback="Mentoreado por asignar" small />
-      </div>
-      {mentorship.goal ? (
-        <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
-          {mentorship.goal}
-        </p>
-      ) : null}
-    </article>
-  );
-}
-
-function Avatar({
-  name,
-  photo,
-  size = 'md',
-}: {
-  name: string;
-  photo?: string;
-  size?: 'sm' | 'md' | 'lg';
-}) {
-  const sizeClass = {
-    sm: 'size-9 text-xs',
-    md: 'size-12 text-sm',
-    lg: 'size-24 text-2xl',
-  }[size];
-
-  const palettes = [
-    ['#fae9ed', '#a3233b'],
-    ['#e9f2ee', '#296457'],
-    ['#f5eee2', '#886b34'],
-    ['#edecf5', '#62577f'],
-  ];
-  const palette =
-    palettes[
-      Array.from(name).reduce((sum, char) => sum + char.charCodeAt(0), 0) %
-        palettes.length
-    ];
-  return (
-    <div
-      style={photo ? undefined : { background: palette[0], color: palette[1] }}
-      className={cn(
-        'person-avatar grid shrink-0 place-items-center overflow-hidden rounded-2xl bg-zinc-100 font-semibold ring-1 ring-inset ring-black/5',
-        sizeClass,
-      )}
-    >
-      {photo ? (
-        <Image
-          unoptimized
-          width={96}
-          height={96}
-          src={photo}
-          alt={name}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <>
-          <span className="avatar-pattern" aria-hidden="true" />
-          <span className="relative">{initials(name)}</span>
-        </>
-      )}
-    </div>
-  );
-}
-
-function PersonLine({
-  person,
-  fallback,
-  small = false,
-}: {
-  person?: Mentor | Mentee;
-  fallback: string;
-  small?: boolean;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <Avatar
-        name={person?.name ?? fallback}
-        photo={person?.photo}
-        size={small ? 'sm' : 'md'}
-      />
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">
-          {person?.name ?? fallback}
-        </p>
-        <p className="truncate text-xs text-muted-foreground">
-          {'title' in (person ?? {})
-            ? (person as Mentor).title
-            : (person as Mentee | undefined)?.venture || 'Sin emprendimiento'}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-muted/25 p-6 text-center">
-      <FolderOpen className="mx-auto mb-2 size-8 text-muted-foreground" />
-      <p className="font-semibold">{title}</p>
-      <p className="text-sm text-muted-foreground">{body}</p>
-    </div>
   );
 }
