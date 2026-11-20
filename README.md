@@ -24,7 +24,9 @@ Para desarrollo y build, copiar `.env.example` a `.env.local` y completar única
 
 La sesión se valida directamente contra Supabase. La entrada web es pública, mientras los registros y archivos del programa conservan las políticas RLS y los permisos existentes. El acceso con correo y contraseña no utiliza una redirección OAuth. Si se incorporan recuperación de contraseña, magic links o OAuth, se deberán configurar sus URLs de retorno en Supabase.
 
-La primera publicación se realiza mediante un artefacto verificado en Netlify Drop. No se habilita despliegue automático por cada push: se puede conectar posteriormente este repositorio con el comando, carpeta y variables anteriores.
+El flujo `.github/workflows/deploy-netlify.yml` publica los pushes a `main` mediante GitHub Actions. Antes de publicar ejecuta instalación de dependencias, comprobación de tipos, lint, pruebas y compilación. Si alguna comprobación falla, conserva la versión publicada. También permite iniciar una ejecución desde la pestaña Actions de GitHub.
+
+Para activar el flujo, el repositorio necesita los secretos `NETLIFY_AUTH_TOKEN`, `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`. El token de Netlify se utiliza exclusivamente en el paso de publicación. El destino es el proyecto Netlify indicado arriba; Supabase mantiene la autenticación, los datos y los archivos. Las ejecuciones de producción se procesan sin interrumpir un despliegue en curso.
 
 ## Ejecutar la versión anterior de Sites
 
