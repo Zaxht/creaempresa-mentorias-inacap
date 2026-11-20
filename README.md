@@ -11,9 +11,9 @@ Aplicación web para administrar mentores, mentoreados y sus sesiones de acompa�
 - **Mentor:** actualiza su perfil y las sesiones de sus mentorías; exporta la información a la que tiene acceso.
 - **Mentoreado:** actualiza su ficha y consulta sus mentorías y sesiones.
 
-Las altas se guardan con **Crear**. Las ediciones de fichas y sesiones se confirman con **Guardar cambios**. Cada mentoría tiene seis sesiones; cada sesión admite una foto PNG/JPEG de hasta 2 MB y un documento PDF de hasta 5 MB.
+Las altas se guardan con **Crear**. Las fichas se confirman con **Guardar cambios**. Las mentorías y sesiones se editan en su propia ventana y se guardan desde allí. Cada mentoría tiene seis sesiones; cada sesión admite una foto PNG/JPEG de hasta 2 MB y un documento PDF de hasta 5 MB.
 
-La opción **Abrir demostración** utiliza datos locales del navegador. El acceso con correo y contraseña utiliza las cuentas y registros de Supabase.
+El acceso requiere una cuenta del programa creada por el administrador. Se utiliza el correo y la contraseña de Supabase.
 
 ## Tecnologías
 
@@ -44,15 +44,15 @@ Los permisos se controlan mediante RLS y validaciones en PostgreSQL. `get_worksp
 
 ## Estructura
 
-| Ruta | Contenido |
-| --- | --- |
-| `app/page.tsx` | Vistas y flujo principal |
-| `components/` | Acceso, formularios y componentes de interfaz |
-| `lib/mentorias/` | Modelo, reglas, repositorio, métricas y Excel |
-| `supabase/` | Migración y configuración inicial de perfiles |
-| `netlify/` | Entrada de la aplicación para Vite |
-| `tests/` | Pruebas de reglas del cliente y base de datos |
-| `.github/workflows/` | Verificación y despliegue |
+| Ruta                 | Contenido                                     |
+| -------------------- | --------------------------------------------- |
+| `app/page.tsx`       | Vistas y flujo principal                      |
+| `components/`        | Acceso, formularios y componentes de interfaz |
+| `lib/mentorias/`     | Modelo, reglas, repositorio, métricas y Excel |
+| `supabase/`          | Migración y configuración inicial de perfiles |
+| `netlify/`           | Entrada de la aplicación para Vite            |
+| `tests/`             | Pruebas de reglas del cliente y base de datos |
+| `.github/workflows/` | Verificación y despliegue                     |
 
 `evaluacion2/implementacion/` contiene un prototipo anterior independiente; su base de datos no se utiliza en la aplicación publicada. Los comandos `dev` y `build` conservan la configuración anterior Vinext; para la versión actual se utilizan los comandos con sufijo `:netlify`.
 

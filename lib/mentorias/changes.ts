@@ -1,4 +1,4 @@
-import type { AppState } from './domain';
+import type { AppState, Mentorship } from './domain';
 
 export type Command = {
   entity: string;
@@ -6,6 +6,47 @@ export type Command = {
   version: number | null;
   patch: Record<string, unknown>;
 };
+
+// A dialog saves only its mentorship, preserving unsaved edits in other views.
+export function mentorshipSaveState(
+  original: AppState,
+  record: Mentorship,
+): AppState {
+  if (!original.mentorships.some((item) => item.id === record.id))
+    throw new Error('La mentoría ya no está disponible. Actualiza los datos.');
+  return {
+    ...original,
+    mentorships: original.mentorships.map((item) =>
+      item.id === record.id ? record : item,
+    ),
+  };
+}
+
+// PostgreSQL increments each modified row once. Keep that acknowledged version
+// if the write succeeds but the following refresh is temporarily unavailable.
+export function acknowledgedMentorship(
+  record: Mentorship,
+  commands: Command[],
+): Mentorship {
+  const version = (
+    entity: string,
+    id: string | undefined,
+    fallback: number | undefined,
+  ) => {
+    const command = commands.find(
+      (item) => item.entity === entity && item.id === id,
+    );
+    return command ? (command.version ?? 0) + 1 : fallback;
+  };
+  return {
+    ...record,
+    version: version('mentorships', record.id, record.version),
+    sessions: record.sessions.map((session) => ({
+      ...session,
+      version: version('sessions', session.id, session.version),
+    })),
+  };
+}
 const fields = {
   mentors: ['name', 'title', 'email', 'phone', 'expertise', 'bio', 'photo'],
   mentees: ['name', 'venture', 'stage', 'email', 'phone', 'need', 'photo'],

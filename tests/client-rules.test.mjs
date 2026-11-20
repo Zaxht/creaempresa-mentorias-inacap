@@ -82,3 +82,70 @@ test('valida contenido, MIME y tamaño de evidencias', async () => {
     /5 MB/,
   );
 });
+
+// Saving one dialog must not persist unrelated drafts or touch other sessions.
+import {
+  mentorshipSaveState,
+  acknowledgedMentorship,
+} from '../lib/mentorias/changes.ts';
+test('el guardado de una mentoría está aislado y conserva las versiones confirmadas', () => {
+  const record = {
+    id: 'm1',
+    version: 2,
+    goal: 'Inicial',
+    sessions: [
+      {
+        id: 's1',
+        version: 4,
+        number: 1,
+        status: 'Pendiente',
+        date: '',
+        summary: '',
+      },
+      {
+        id: 's2',
+        version: 7,
+        number: 2,
+        status: 'Pendiente',
+        date: '',
+        summary: '',
+      },
+    ],
+  };
+  const original = {
+    mentors: [{ id: 'p1', version: 1, name: 'Persona' }],
+    mentees: [],
+    mentorships: [record, { id: 'm2', version: 5, goal: 'Otra', sessions: [] }],
+  };
+  const changed = structuredClone(record);
+  changed.sessions[0] = {
+    ...changed.sessions[0],
+    status: 'Realizada',
+    date: '2026-11-20',
+    summary: 'Acuerdo registrado',
+  };
+  const target = mentorshipSaveState(original, changed);
+  const commands = collectChanges(original, target);
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0].entity, 'sessions');
+  assert.equal(commands[0].id, 's1');
+  assert.equal(commands[0].version, 4);
+  assert.deepEqual(target.mentors, original.mentors);
+  assert.deepEqual(target.mentorships[1], original.mentorships[1]);
+  assert.equal(original.mentorships[0].sessions[0].status, 'Pendiente');
+  const acknowledged = acknowledgedMentorship(changed, commands);
+  assert.equal(acknowledged.version, 2);
+  assert.equal(acknowledged.sessions[0].version, 5);
+  assert.equal(acknowledged.sessions[1].version, 7);
+  assert.deepEqual(
+    collectChanges(
+      { ...original, mentorships: [acknowledged] },
+      { ...original, mentorships: [acknowledged] },
+    ),
+    [],
+  );
+  assert.throws(
+    () => mentorshipSaveState(original, { ...record, id: 'missing' }),
+    /ya no está disponible/,
+  );
+});
