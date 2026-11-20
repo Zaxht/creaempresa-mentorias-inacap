@@ -70,9 +70,9 @@ export function ExportWorkspace({
   const examples = hasExampleData(state);
   const counts = {
     summary: '9 indicadores',
-    mentors: `${state.mentors.length} perfiles`,
-    mentees: `${state.mentees.length} perfiles`,
-    mentorships: `${state.mentorships.length} registros`,
+    mentors: `${state.mentors.length} ${state.mentors.length === 1 ? 'perfil' : 'perfiles'}`,
+    mentees: `${state.mentees.length} ${state.mentees.length === 1 ? 'perfil' : 'perfiles'}`,
+    mentorships: `${state.mentorships.length} ${state.mentorships.length === 1 ? 'registro' : 'registros'}`,
     sessions: `${state.mentorships.reduce((total, m) => total + m.sessions.length, 0)} sesiones`,
   };
   const changeOptions = (next: ExportOptions) => {
