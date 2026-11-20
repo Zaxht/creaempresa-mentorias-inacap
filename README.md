@@ -100,7 +100,7 @@ El lint conserva las comprobaciones de accesibilidad. En los componentes base re
 
 ## Decisión de arquitectura para EVA3
 
-La solución utiliza cliente-servidor y separación por capas. React/TypeScript presenta la interfaz; dominio y cambios preparan las operaciones; MentoriasRepository conecta con Supabase Auth, PostgreSQL y Storage. Vinext/Vite genera el frontend y el Worker que entrega la configuración pública. La autorización efectiva reside en PostgreSQL/RLS y Storage. Se sustituye la propuesta anterior de un servidor Express por servicios administrados para reducir la instalación y mantener autenticación, datos y archivos en el mismo proveedor. El ejemplo SQLite anterior se conserva como antecedente académico, no como backend de esta web.
+La solución utiliza cliente-servidor y separación por capas. React/TypeScript presenta la interfaz; dominio y cambios preparan las operaciones; MentoriasRepository conecta con Supabase Auth, PostgreSQL y Storage. Vite genera archivos estáticos para Netlify y el archivo público api/config.json. GitHub Actions verifica y publica cada push a main. La autorización efectiva reside en PostgreSQL/RLS y Storage. Se sustituye la propuesta anterior de un servidor Express por servicios administrados para reducir la instalación y mantener autenticación, datos y archivos en el mismo proveedor. El ejemplo SQLite anterior se conserva como antecedente académico, no como backend de esta web.
 
 ```mermaid
 flowchart TD
@@ -113,7 +113,7 @@ flowchart TD
   F --> H[Procedimientos read_workspace y apply_changes]
   H --> I[PostgreSQL / RLS y restricciones]
   G --> I
-  J[Worker Vinext / configuración pública] --> B
+  J[Netlify / frontend y configuración pública] --> B
 ```
 
 El modelo relaciona mentors y mentees con mentorships; cada mentoría tiene seis sessions y cada sesión admite una evidence por tipo (foto/documento). app_profiles vincula la identidad de Auth y su rol. audit_events y write_limits soportan auditoría y control de escrituras. Las claves foráneas evitan referencias inexistentes; la unicidad evita repetir sesiones y tipos de evidencia. Los archivos binarios se guardan en Storage y sus metadatos en PostgreSQL. Las especialidades del mentor usan text[] como colección de etiquetas; no se declara una normalización estricta a primera forma normal de ese atributo. Si se necesita un catálogo compartido de especialidades, deberá separarse en tablas de catálogo y asociación.
@@ -130,7 +130,7 @@ El entorno local usa HTTP en localhost:3000; Supabase usa HTTPS/443. El equipo c
 - El control de carga de archivos no incluye antivirus; falta automatizar la limpieza de objetos huérfanos.
 - La creación y vinculación de cuentas se realiza desde Supabase, no desde un módulo de invitaciones de la web.
 - No se han acreditado pruebas de carga, restauración de respaldos ni auditoría integral de accesibilidad.
-- La publicación conserva la audiencia privada del sitio. Un enlace publicado no otorga por sí solo acceso al docente.
+- Netlify sirve la entrada pública; el acceso a datos requiere una cuenta autorizada en Supabase. Las cuentas de evaluación se entregan por un canal separado, sin incluir contraseñas en el informe.
 
 
 ## Verificación de la actualización visual
@@ -142,10 +142,9 @@ En navegador se comprobó el inicio de sesión real, apertura de fichas, desplie
 
 ## Publicación actual
 
-Publicación confirmada por Sites el 19 de noviembre de 2026: https://monitoreo-mentorias-2026-inacap.zaxht.chatgpt.site (privada). Fuente de la versión publicada: b510cdf6acba44d483b7975631f87ab154e61d3d. Variables SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY configuradas en el hosting. Repositorio privado: https://github.com/Zaxht/creaempresa-mentorias-inacap. El servidor de desarrollo permanece en http://localhost:3000.
+Sitio público: https://creaempresa-mentorias-inacap.netlify.app/. Repositorio privado: https://github.com/Zaxht/creaempresa-mentorias-inacap. Los pushes a main ejecutan typecheck, lint, 32 pruebas y build antes de publicar. El hosting anterior Sites se conserva únicamente como antecedente.
 
-El informe técnico breve está en evidencias/Informe_EVA3.html y el registro de comprobaciones en evidencias/VERIFICACION.txt. El HTML es un complemento de implementación; no reemplaza ni modifica el Word anterior de otra asignatura. La vista del informe HTML no se pudo abrir en el navegador integrado porque este bloquea URLs file://; sus capturas se revisaron por separado.
-
+El informe breve actualizado está en evidencias/Defensa_EVA3_Grupo5.docx. El registro de comprobaciones está en evidencias/VERIFICACION.txt.
 
 ### Comprobación del despliegue Netlify
 
@@ -153,3 +152,13 @@ La portada y /api/config devolvieron HTTP 200 desde el dominio definitivo. La co
 
 
 Desde el dominio Netlify definitivo se verificaron también el inicio de sesión del administrador, la carga de las dos mentorías de prueba y la descarga de Excel. El archivo exportado contiene las cinco hojas, el logo y los datos ficticios existentes de Supabase. Se corrigió el ajuste de etiquetas largas en las tarjetas del resumen.
+
+## Cierre de revisión EVA3 — 20 de noviembre
+
+Las altas de mentores, mentoreados y mentorías usan un formulario modal con cancelar, validación y guardado inmediato. El alta solo persiste el registro nuevo, conservando las ediciones pendientes de otras fichas. Si falla el guardado, el formulario conserva sus datos y permite reintentar. Las fichas existentes y sesiones mantienen el botón global Guardar cambios; el texto de ayuda lo explica. Registrar una ficha no crea una cuenta de acceso: la vinculación se administra en Supabase.
+
+Se verificaron alta y cancelación en demostración; en Supabase real se verificó un error simulado de guardado con recuperación del borrador, alta de mentor, recarga, alta de participante y mentoría. Los registros PRUEBA QA UX son ficticios. Las cinco secciones se comprobaron a 390, 768 y 1366 px sin desbordamiento horizontal. Se corrigió el ancho mínimo de la navegación móvil.
+
+Decisión de datos: mentores, participantes, mentorías, sesiones y evidencias están separados por entidad, con claves y restricciones. Las especialidades son etiquetas locales del mentor en un arreglo PostgreSQL; se conserva esta excepción deliberada a la primera forma normal clásica. No hay catálogo compartido ni atributos dependientes de cada etiqueta. Si se incorpora ese catálogo, la migración prevista separará especialidades y mentor_especialidad. No se declara normalización estricta de todo el modelo.
+
+Alcance de seguridad académico: se aplican Auth, roles/RLS, transacciones, validación y límites de solicitudes. Los controles de sesión única, duración máxima e inactividad del servidor previstos inicialmente no están implementados en el plan observado. Se documenta la desviación para revisión docente; no se presenta como aprobada ni como control equivalente al vencimiento del token. Es requisito de cierre antes de uso con participantes reales. No se contratan servicios de pago sin solicitud.

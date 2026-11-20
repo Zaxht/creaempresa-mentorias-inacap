@@ -1,5 +1,6 @@
 'use client';
 import Image from 'next/image';
+import { CreateRecordDialog } from '@/components/create-record-dialog';
 
 import {
   useEffect,
@@ -19,7 +20,6 @@ import {
   FolderOpen,
   LayoutDashboard,
   Paperclip,
-  Plus,
   Search,
   Upload,
   User,
@@ -367,11 +367,15 @@ function WorkspaceView({
     name: '',
     title: '',
     expertise: '',
+    email: '',
+    phone: '',
   });
   const [newMentee, setNewMentee] = useState({
     name: '',
     venture: '',
     need: '',
+    email: '',
+    phone: '',
   });
   const [newMentorship, setNewMentorship] = useState({
     mentorId: workspace?.state.mentors[0]?.id ?? DEFAULT_MENTORS[0].id,
@@ -605,20 +609,57 @@ function WorkspaceView({
     setStatusFilter('Todos');
   };
 
-  const addMentor = () => {
-    if (role !== 'Administrador') return;
+  const createRecord = async <K extends keyof AppState>(
+    key: K,
+    record: AppState[K][number],
+  ) => {
+    if (saving) throw new Error('Espera a que termine el guardado.');
+    setSaving(true);
+    try {
+      let saved = record;
+      if (repository) {
+        await repository.save(original, {
+          ...original,
+          [key]: [...original[key], record],
+        });
+        try {
+          const fresh = await repository.load();
+          saved =
+            fresh.state[key].find((item) => item.id === record.id) ?? record;
+        } catch {
+          setSaveWarning(
+            'El registro se guardó. Pulsa Actualizar para recuperar sus datos completos.',
+          );
+        }
+        setOriginal((current) => ({
+          ...current,
+          [key]: [...current[key], saved],
+        }));
+      }
+      setState((current) => ({ ...current, [key]: [...current[key], saved] }));
+      setSaveMessage(
+        repository
+          ? 'Registro creado y guardado.'
+          : 'Registro creado en la demostración.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addMentor = async () => {
+    if (role !== 'Administrador')
+      throw new Error('No tienes permiso para crear registros.');
     const name = newMentor.name.trim();
 
-    if (!name) {
-      return;
-    }
+    if (!name) throw new Error('Escribe el nombre de la persona.');
 
     const mentor: Mentor = {
       id: crypto.randomUUID(),
       name,
       title: newMentor.title.trim() || 'Mentor/a',
-      email: '',
-      phone: '',
+      email: newMentor.email.trim(),
+      phone: newMentor.phone.trim(),
       expertise: newMentor.expertise
         .split(',')
         .map((item) => item.trim())
@@ -626,52 +667,45 @@ function WorkspaceView({
       bio: '',
     };
 
-    setState((current) => ({
-      ...current,
-      mentors: [...current.mentors, mentor],
-    }));
+    await createRecord('mentors', mentor);
     setActiveMentorId(mentor.id);
     if (!mentors.some((m) => m.id === newMentorship.mentorId))
       setNewMentorship((current) => ({ ...current, mentorId: mentor.id }));
-    setNewMentor({ name: '', title: '', expertise: '' });
+    setNewMentor({ name: '', title: '', expertise: '', email: '', phone: '' });
   };
 
-  const addMentee = () => {
-    if (role !== 'Administrador') return;
+  const addMentee = async () => {
+    if (role !== 'Administrador')
+      throw new Error('No tienes permiso para crear registros.');
     const name = newMentee.name.trim();
 
-    if (!name) {
-      return;
-    }
+    if (!name) throw new Error('Escribe el nombre de la persona.');
 
     const mentee: Mentee = {
       id: crypto.randomUUID(),
       name,
       venture: newMentee.venture.trim(),
       stage: 'Por registrar',
-      email: '',
-      phone: '',
+      email: newMentee.email.trim(),
+      phone: newMentee.phone.trim(),
       need: newMentee.need.trim(),
     };
 
-    setState((current) => ({
-      ...current,
-      mentees: [...current.mentees, mentee],
-    }));
+    await createRecord('mentees', mentee);
     setActiveMenteeId(mentee.id);
     if (!mentees.some((m) => m.id === newMentorship.menteeId))
       setNewMentorship((current) => ({ ...current, menteeId: mentee.id }));
-    setNewMentee({ name: '', venture: '', need: '' });
+    setNewMentee({ name: '', venture: '', need: '', email: '', phone: '' });
   };
 
-  const addMentorship = () => {
-    if (role !== 'Administrador') return;
+  const addMentorship = async () => {
+    if (role !== 'Administrador')
+      throw new Error('No tienes permiso para crear registros.');
     if (
       !mentors.some((m) => m.id === newMentorship.mentorId) ||
       !mentees.some((m) => m.id === newMentorship.menteeId)
     ) {
-      setSaveWarning('Selecciona un mentor y un mentoreado registrados.');
-      return;
+      throw new Error('Primero registra un mentor y un mentoreado.');
     }
 
     const mentorship: Mentorship = {
@@ -693,10 +727,9 @@ function WorkspaceView({
       sessions: repository ? [] : createSessions(),
     };
 
-    setState((current) => ({
-      ...current,
-      mentorships: [...current.mentorships, mentorship],
-    }));
+    await createRecord('mentorships', mentorship);
+    setSearch('');
+    setStatusFilter('Todos');
     setActiveView('mentorships');
   };
 
@@ -995,7 +1028,7 @@ function WorkspaceView({
         </header>
 
         <div className="mx-auto grid max-w-[1500px] gap-7 px-4 py-7 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:px-8">
-          <aside className="workspace-sidebar rounded-2xl border border-zinc-200 bg-white p-3 lg:sticky lg:top-24 lg:self-start">
+          <aside className="workspace-sidebar min-w-0 rounded-2xl border border-zinc-200 bg-white p-3 lg:sticky lg:top-24 lg:self-start">
             <nav
               className="flex gap-1 overflow-x-auto lg:grid"
               aria-label="Secciones"
@@ -1103,6 +1136,16 @@ function WorkspaceView({
 
             {activeView === 'mentorships' ? (
               <MentorshipsView
+                createAction={
+                  role === 'Administrador' ? (
+                    <NewMentorshipForm
+                      state={state}
+                      newMentorship={newMentorship}
+                      setNewMentorship={setNewMentorship}
+                      addMentorship={addMentorship}
+                    />
+                  ) : null
+                }
                 role={role}
                 search={search}
                 setSearch={setSearch}
@@ -1136,6 +1179,120 @@ function WorkspaceView({
   );
 }
 
+type MentorshipDraft = {
+  mentorId: string;
+  menteeId: string;
+  month: string;
+  service: string;
+};
+function NewMentorshipForm({
+  state,
+  newMentorship,
+  setNewMentorship,
+  addMentorship,
+}: {
+  state: AppState;
+  newMentorship: MentorshipDraft;
+  setNewMentorship: (value: MentorshipDraft) => void;
+  addMentorship: () => Promise<void>;
+}) {
+  return (
+    <CreateRecordDialog
+      title="Nueva mentoría"
+      description="Selecciona las personas y el servicio para comenzar."
+      onCreate={addMentorship}
+      onCancel={() =>
+        setNewMentorship({
+          mentorId: state.mentors[0]?.id ?? '',
+          menteeId: state.mentees[0]?.id ?? '',
+          month: MONTHS[new Date().getMonth()],
+          service: SERVICES[0],
+        })
+      }
+      disabled={!state.mentors.length || !state.mentees.length}
+    >
+      <FieldLabel label="Mentor">
+        <NativeSelect
+          value={newMentorship.mentorId}
+          onChange={(event) =>
+            setNewMentorship({
+              ...newMentorship,
+              mentorId: event.target.value,
+            })
+          }
+          className="w-full"
+          aria-label="Seleccionar mentor"
+        >
+          {state.mentors.map((mentor) => (
+            <NativeSelectOption key={mentor.id} value={mentor.id}>
+              {mentor.name}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+      </FieldLabel>
+      <FieldLabel label="Mentoreado">
+        <NativeSelect
+          value={newMentorship.menteeId}
+          onChange={(event) =>
+            setNewMentorship({
+              ...newMentorship,
+              menteeId: event.target.value,
+            })
+          }
+          className="w-full"
+          aria-label="Seleccionar mentoreado"
+        >
+          {state.mentees.map((mentee) => (
+            <NativeSelectOption key={mentee.id} value={mentee.id}>
+              {mentee.name}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+      </FieldLabel>
+      <div className="grid grid-cols-2 gap-3">
+        <FieldLabel label="Mes">
+          <NativeSelect
+            value={newMentorship.month}
+            onChange={(event) =>
+              setNewMentorship({
+                ...newMentorship,
+                month: event.target.value,
+              })
+            }
+            className="w-full"
+            aria-label="Mes"
+          >
+            {MONTHS.map((month) => (
+              <NativeSelectOption key={month} value={month}>
+                {month}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </FieldLabel>
+        <FieldLabel label="Servicio">
+          <NativeSelect
+            value={newMentorship.service}
+            onChange={(event) =>
+              setNewMentorship({
+                ...newMentorship,
+                service: event.target.value,
+              })
+            }
+            className="w-full"
+            aria-label="Servicio"
+          >
+            {SERVICES.map((service) => (
+              <NativeSelectOption key={service} value={service}>
+                {service}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </FieldLabel>
+      </div>
+    </CreateRecordDialog>
+  );
+}
+
 function DashboardView({
   metrics,
   state,
@@ -1157,7 +1314,7 @@ function DashboardView({
     month: string;
     service: string;
   }) => void;
-  addMentorship: () => void;
+  addMentorship: () => Promise<void>;
 }) {
   const attentionItems = state.mentorships.filter((mentorship) =>
     ['Suspendida', 'Esperando derivación', 'Derivada'].includes(
@@ -1243,94 +1400,23 @@ function DashboardView({
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
-          <div className="mb-4 flex items-center gap-2">
-            <Plus className="size-4 text-primary" aria-hidden="true" />
-            <h2 className="text-lg font-semibold">Nueva mentoría</h2>
-          </div>
-          <div className="grid gap-3">
-            <FieldLabel label="Mentor">
-              <NativeSelect
-                value={newMentorship.mentorId}
-                onChange={(event) =>
-                  setNewMentorship({
-                    ...newMentorship,
-                    mentorId: event.target.value,
-                  })
-                }
-                className="w-full"
-                aria-label="Seleccionar mentor"
-              >
-                {state.mentors.map((mentor) => (
-                  <NativeSelectOption key={mentor.id} value={mentor.id}>
-                    {mentor.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </FieldLabel>
-            <FieldLabel label="Mentoreado">
-              <NativeSelect
-                value={newMentorship.menteeId}
-                onChange={(event) =>
-                  setNewMentorship({
-                    ...newMentorship,
-                    menteeId: event.target.value,
-                  })
-                }
-                className="w-full"
-                aria-label="Seleccionar mentoreado"
-              >
-                {state.mentees.map((mentee) => (
-                  <NativeSelectOption key={mentee.id} value={mentee.id}>
-                    {mentee.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </FieldLabel>
-            <div className="grid grid-cols-2 gap-3">
-              <FieldLabel label="Mes">
-                <NativeSelect
-                  value={newMentorship.month}
-                  onChange={(event) =>
-                    setNewMentorship({
-                      ...newMentorship,
-                      month: event.target.value,
-                    })
-                  }
-                  className="w-full"
-                  aria-label="Mes"
-                >
-                  {MONTHS.map((month) => (
-                    <NativeSelectOption key={month} value={month}>
-                      {month}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </FieldLabel>
-              <FieldLabel label="Servicio">
-                <NativeSelect
-                  value={newMentorship.service}
-                  onChange={(event) =>
-                    setNewMentorship({
-                      ...newMentorship,
-                      service: event.target.value,
-                    })
-                  }
-                  className="w-full"
-                  aria-label="Servicio"
-                >
-                  {SERVICES.map((service) => (
-                    <NativeSelectOption key={service} value={service}>
-                      {service}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </FieldLabel>
-            </div>
-            <Button type="button" onClick={addMentorship}>
-              <Plus aria-hidden="true" />
-              Crear mentoría
-            </Button>
-          </div>
+          <h2 className="text-lg font-semibold">Iniciar un acompañamiento</h2>
+          <p className="my-4 text-sm text-muted-foreground">
+            Vincula un mentor con un mentoreado. Al guardar se preparan las seis
+            sesiones.
+          </p>
+          {(!state.mentors.length || !state.mentees.length) && (
+            <p className="mb-4 text-sm text-amber-800">
+              Primero registra al menos un mentor y un mentoreado desde sus
+              secciones.
+            </p>
+          )}
+          <NewMentorshipForm
+            state={state}
+            newMentorship={newMentorship}
+            setNewMentorship={setNewMentorship}
+            addMentorship={addMentorship}
+          />
         </div>
       </section>
 
@@ -1376,13 +1462,21 @@ function MentorsView({
 }: {
   mentors: Mentor[];
   mentorships: Mentorship[];
-  newMentor: { name: string; title: string; expertise: string };
+  newMentor: {
+    name: string;
+    title: string;
+    expertise: string;
+    email: string;
+    phone: string;
+  };
   setNewMentor: (value: {
     name: string;
     title: string;
     expertise: string;
+    email: string;
+    phone: string;
   }) => void;
-  addMentor: () => void;
+  addMentor: () => Promise<void>;
   updateMentor: (mentorId: string, patch: Partial<Mentor>) => void;
   handleMentorPhoto: (
     mentorId: string,
@@ -1397,10 +1491,25 @@ function MentorsView({
         body="Perfiles, especialidades y datos de contacto en formato de tarjetas."
       />
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
-        <div className="grid gap-3 lg:grid-cols-[1fr_220px_1fr_auto] lg:items-end">
+      <div className="flex justify-end">
+        <CreateRecordDialog
+          title="Nuevo mentor"
+          description="Completa la ficha del mentor. El nombre es obligatorio. Puedes añadir una foto después."
+          onCreate={addMentor}
+          onCancel={() =>
+            setNewMentor({
+              name: '',
+              title: '',
+              expertise: '',
+              email: '',
+              phone: '',
+            })
+          }
+        >
           <FieldLabel label="Nombre">
             <Input
+              required
+              maxLength={100}
               value={newMentor.name}
               onChange={(event) =>
                 setNewMentor({ ...newMentor, name: event.target.value })
@@ -1408,8 +1517,9 @@ function MentorsView({
               placeholder="Nuevo mentor"
             />
           </FieldLabel>
-          <FieldLabel label="Rol">
+          <FieldLabel label="Profesión o cargo">
             <Input
+              maxLength={150}
               value={newMentor.title}
               onChange={(event) =>
                 setNewMentor({ ...newMentor, title: event.target.value })
@@ -1419,6 +1529,7 @@ function MentorsView({
           </FieldLabel>
           <FieldLabel label="Especialidades">
             <Input
+              maxLength={150}
               value={newMentor.expertise}
               onChange={(event) =>
                 setNewMentor({ ...newMentor, expertise: event.target.value })
@@ -1426,12 +1537,32 @@ function MentorsView({
               placeholder="Finanzas, ventas, gestión"
             />
           </FieldLabel>
-          <Button type="button" onClick={addMentor}>
-            <Plus aria-hidden="true" />
-            Agregar
-          </Button>
-        </div>
-      </section>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FieldLabel label="Correo">
+              <Input
+                type="email"
+                maxLength={254}
+                value={newMentor.email}
+                onChange={(event) =>
+                  setNewMentor({ ...newMentor, email: event.target.value })
+                }
+                placeholder="correo@dominio.cl"
+              />
+            </FieldLabel>
+            <FieldLabel label="Teléfono">
+              <Input
+                type="tel"
+                maxLength={30}
+                value={newMentor.phone}
+                onChange={(event) =>
+                  setNewMentor({ ...newMentor, phone: event.target.value })
+                }
+                placeholder="+56"
+              />
+            </FieldLabel>
+          </div>
+        </CreateRecordDialog>
+      </div>
 
       <section className="grid gap-4 xl:grid-cols-2">
         {mentors.map((mentor) => (
@@ -1459,13 +1590,21 @@ function MenteesView({
 }: {
   mentees: Mentee[];
   mentorships: Mentorship[];
-  newMentee: { name: string; venture: string; need: string };
+  newMentee: {
+    name: string;
+    venture: string;
+    need: string;
+    email: string;
+    phone: string;
+  };
   setNewMentee: (value: {
     name: string;
     venture: string;
     need: string;
+    email: string;
+    phone: string;
   }) => void;
-  addMentee: () => void;
+  addMentee: () => Promise<void>;
   updateMentee: (menteeId: string, patch: Partial<Mentee>) => void;
   handleMenteePhoto: (
     menteeId: string,
@@ -1480,10 +1619,25 @@ function MenteesView({
         body="Información del emprendimiento, etapa y necesidad principal."
       />
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
-        <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+      <div className="flex justify-end">
+        <CreateRecordDialog
+          title="Nuevo mentoreado"
+          description="Completa los datos de la persona y su emprendimiento. El nombre es obligatorio."
+          onCreate={addMentee}
+          onCancel={() =>
+            setNewMentee({
+              name: '',
+              venture: '',
+              need: '',
+              email: '',
+              phone: '',
+            })
+          }
+        >
           <FieldLabel label="Nombre">
             <Input
+              required
+              maxLength={100}
               value={newMentee.name}
               onChange={(event) =>
                 setNewMentee({ ...newMentee, name: event.target.value })
@@ -1493,6 +1647,7 @@ function MenteesView({
           </FieldLabel>
           <FieldLabel label="Emprendimiento">
             <Input
+              maxLength={150}
               value={newMentee.venture}
               onChange={(event) =>
                 setNewMentee({ ...newMentee, venture: event.target.value })
@@ -1502,6 +1657,7 @@ function MenteesView({
           </FieldLabel>
           <FieldLabel label="Necesidad">
             <Input
+              maxLength={150}
               value={newMentee.need}
               onChange={(event) =>
                 setNewMentee({ ...newMentee, need: event.target.value })
@@ -1509,12 +1665,32 @@ function MenteesView({
               placeholder="Foco de apoyo"
             />
           </FieldLabel>
-          <Button type="button" onClick={addMentee}>
-            <Plus aria-hidden="true" />
-            Agregar
-          </Button>
-        </div>
-      </section>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FieldLabel label="Correo">
+              <Input
+                type="email"
+                maxLength={254}
+                value={newMentee.email}
+                onChange={(event) =>
+                  setNewMentee({ ...newMentee, email: event.target.value })
+                }
+                placeholder="correo@dominio.cl"
+              />
+            </FieldLabel>
+            <FieldLabel label="Teléfono">
+              <Input
+                type="tel"
+                maxLength={30}
+                value={newMentee.phone}
+                onChange={(event) =>
+                  setNewMentee({ ...newMentee, phone: event.target.value })
+                }
+                placeholder="+56"
+              />
+            </FieldLabel>
+          </div>
+        </CreateRecordDialog>
+      </div>
 
       <section className="grid gap-4 xl:grid-cols-2">
         {mentees.map((mentee) => (
@@ -1627,6 +1803,7 @@ function MenteeProfileView({
 }
 
 function MentorshipsView({
+  createAction,
   role,
   search,
   setSearch,
@@ -1639,6 +1816,7 @@ function MentorshipsView({
   updateSession,
   handleSessionAttachment,
 }: {
+  createAction: ReactNode;
   role: Role;
   search: string;
   setSearch: (value: string) => void;
@@ -1670,6 +1848,7 @@ function MentorshipsView({
         body="Estados, avances, sesiones y evidencias en tarjetas de trabajo."
       />
 
+      <div className="flex justify-end">{createAction}</div>
       <section className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm">
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
           <label htmlFor="mentorship-search" className="relative block">
@@ -1998,8 +2177,12 @@ function MentorCard({
       </div>
       <details className="group">
         <summary className="cursor-pointer rounded-lg bg-zinc-50 px-3 py-3 text-sm font-medium text-primary hover:bg-red-50">
-          Ver y editar ficha
+          Editar ficha
         </summary>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Al terminar, pulsa Guardar cambios en la barra superior. En
+          demostración, los cambios se conservan solo en este navegador.
+        </p>
         <div className="mt-5 flex flex-col gap-4 sm:flex-row">
           <div className="flex shrink-0 flex-col items-start gap-3">
             <Avatar name={mentor.name} photo={mentor.photo} size="lg" />
@@ -2034,6 +2217,8 @@ function MentorCard({
             <div className="grid gap-3 md:grid-cols-2">
               <FieldLabel label="Correo">
                 <Input
+                  type="email"
+                  maxLength={254}
                   value={mentor.email}
                   onChange={(event) =>
                     updateMentor(mentor.id, { email: event.target.value })
@@ -2114,8 +2299,12 @@ function MenteeCard({
       </div>
       <details className="group">
         <summary className="cursor-pointer rounded-lg bg-zinc-50 px-3 py-3 text-sm font-medium text-primary hover:bg-red-50">
-          Ver y editar ficha
+          Editar ficha
         </summary>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Al terminar, pulsa Guardar cambios en la barra superior. En
+          demostración, los cambios se conservan solo en este navegador.
+        </p>
         <div className="mt-5 flex flex-col gap-4 sm:flex-row">
           <div className="flex shrink-0 flex-col items-start gap-3">
             <Avatar name={mentee.name} photo={mentee.photo} size="lg" />
@@ -2158,6 +2347,8 @@ function MenteeCard({
               </FieldLabel>
               <FieldLabel label="Correo">
                 <Input
+                  type="email"
+                  maxLength={254}
                   value={mentee.email}
                   onChange={(event) =>
                     updateMentee(mentee.id, { email: event.target.value })

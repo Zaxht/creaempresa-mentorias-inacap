@@ -17,3 +17,14 @@ Verificación manual actual: login, ficha desplegable, sesión desplegable, edic
 Pruebas anteriores: creación de personas y mentorías, seis sesiones, fotos/PDF, exportaciones y aislamiento de los roles Mentor y Mentoreado. Se restauró Administrador al terminar.
 
 Límites: no se ha ejecutado una auditoría de seguridad completa. La sesión única y los tiempos de sesión del servidor requieren Pro en la configuración observada. La emulación móvil no aplicó el viewport solicitado; requiere verificación efectiva. No se declara que las pruebas del demostrador acrediten toda la web.
+
+
+REVISIÓN 20 DE NOVIEMBRE DE 2026
+- Formularios de alta con Crear y guardar / Cancelar para las tres entidades.
+- Demostración: alta de mentor, cancelación sin inserción, alta de participante.
+- Supabase real: error HTTP simulado conserva datos; reintento guarda mentor; Actualizar confirma persistencia; alta de participante y mentoría con seis sesiones.
+- Se añadieron exclusivamente registros ficticios identificados PRUEBA QA UX.
+- Escritorio y móvil: cinco secciones a 390, 768 y 1366 px sin desbordamiento horizontal. No equivale a una auditoría completa de accesibilidad.
+- Typecheck, lint, 32 pruebas y build Netlify aprobados tras el cambio.
+- alta-mentor.png y alta-movil.png: formularios de demostración. flujo-guardado.png: registros ficticios guardados en Supabase real.
+- Normalización y limitación de sesiones documentadas como decisiones y desviaciones explícitas; no se declara aprobación docente.
