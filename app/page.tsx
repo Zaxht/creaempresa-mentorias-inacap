@@ -1,6 +1,8 @@
 'use client';
 import Image from 'next/image';
 import { CreateRecordDialog } from '@/components/create-record-dialog';
+import { PersonFields } from '@/components/person-fields';
+import { ProgramGraphic } from '@/components/program-graphic';
 
 import {
   useEffect,
@@ -25,15 +27,27 @@ import {
   User,
   UserCheck,
   Users,
+  Mail,
+  Phone,
+  BriefcaseBusiness,
+  Target,
+  MapPin,
+  BadgeCheck,
+  ChevronRight,
+  LogOut,
+  RefreshCw,
+  Save,
+  PencilLine,
+  Sparkles,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from '@/components/ui/native-select';
+  ProgramSelect as NativeSelect,
+  ProgramOption as NativeSelectOption,
+} from '@/components/program-select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { MentoriasAccess } from '@/components/mentorias-access';
@@ -368,12 +382,14 @@ function WorkspaceView({
     name: '',
     expertise: '',
     email: '',
+    password: '',
     phone: '',
   });
   const [newMentee, setNewMentee] = useState({
     name: '',
     venture: '',
     email: '',
+    password: '',
     phone: '',
   });
   const [newMentorship, setNewMentorship] = useState({
@@ -611,20 +627,31 @@ function WorkspaceView({
   const createRecord = async <K extends keyof AppState>(
     key: K,
     record: AppState[K][number],
+    password?: string,
   ) => {
     if (saving) throw new Error('Espera a que termine el guardado.');
     setSaving(true);
     try {
       let saved = record;
       if (repository) {
-        await repository.save(original, {
-          ...original,
-          [key]: [...original[key], record],
-        });
+        let savedId = record.id;
+        if (key === 'mentors' || key === 'mentees') {
+          savedId = await repository.createPerson(
+            key,
+            record as Mentor | Mentee,
+            password ?? '',
+          );
+          saved = { ...record, id: savedId };
+        } else {
+          await repository.save(original, {
+            ...original,
+            [key]: [...original[key], record],
+          });
+        }
         try {
           const fresh = await repository.load();
           saved =
-            fresh.state[key].find((item) => item.id === record.id) ?? record;
+            fresh.state[key].find((item) => item.id === savedId) ?? record;
         } catch {
           setSaveWarning(
             'El registro se guardó. Pulsa Actualizar para recuperar sus datos completos.',
@@ -638,7 +665,9 @@ function WorkspaceView({
       setState((current) => ({ ...current, [key]: [...current[key], saved] }));
       setSaveMessage(
         repository
-          ? 'Registro creado y guardado.'
+          ? key === 'mentors' || key === 'mentees'
+            ? 'Cuenta y ficha creadas. Comparte el correo y la contraseña inicial con la persona.'
+            : 'Registro creado y guardado.'
           : 'Registro creado en la demostración.',
       );
     } finally {
@@ -657,7 +686,7 @@ function WorkspaceView({
       id: crypto.randomUUID(),
       name,
       title: '',
-      email: newMentor.email.trim(),
+      email: newMentor.email.trim().toLowerCase(),
       phone: newMentor.phone.trim(),
       expertise: newMentor.expertise
         .split(',')
@@ -666,9 +695,15 @@ function WorkspaceView({
       bio: '',
     };
 
-    await createRecord('mentors', mentor);
+    await createRecord('mentors', mentor, newMentor.password);
     setActiveMentorId(mentor.id);
-    setNewMentor({ name: '', expertise: '', email: '', phone: '' });
+    setNewMentor({
+      name: '',
+      expertise: '',
+      email: '',
+      phone: '',
+      password: '',
+    });
   };
 
   const addMentee = async () => {
@@ -683,14 +718,14 @@ function WorkspaceView({
       name,
       venture: newMentee.venture.trim(),
       stage: '',
-      email: newMentee.email.trim(),
+      email: newMentee.email.trim().toLowerCase(),
       phone: newMentee.phone.trim(),
       need: '',
     };
 
-    await createRecord('mentees', mentee);
+    await createRecord('mentees', mentee, newMentee.password);
     setActiveMenteeId(mentee.id);
-    setNewMentee({ name: '', venture: '', email: '', phone: '' });
+    setNewMentee({ name: '', venture: '', email: '', phone: '', password: '' });
   };
 
   const addMentorship = async () => {
@@ -879,7 +914,7 @@ function WorkspaceView({
   };
 
   return (
-    <main className="workspace min-h-screen bg-zinc-50 text-foreground">
+    <main className="workspace min-h-screen text-foreground">
       <div className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-white/95 px-5 py-3 text-sm backdrop-blur">
         <div aria-live="polite">
           <strong>
@@ -897,26 +932,29 @@ function WorkspaceView({
                   : 'Guardado en este navegador'}
           </span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2">
           {repository && (
             <>
               <Button
                 onClick={() => void saveChanges()}
                 disabled={saving || !hasChanges}
               >
-                Guardar cambios
+                <Save size={15} /> Guardar cambios
               </Button>
               <Button
                 variant="outline"
+                aria-label="Actualizar"
                 onClick={() => void reload()}
                 disabled={saving}
               >
-                Actualizar
+                <RefreshCw size={15} />{' '}
+                <span className="hidden sm:inline">Actualizar</span>
               </Button>
             </>
           )}
           <Button
             variant="outline"
+            aria-label="Salir"
             disabled={saving}
             onClick={() => {
               if (
@@ -926,7 +964,7 @@ function WorkspaceView({
                 exit();
             }}
           >
-            Salir
+            <LogOut size={15} /> <span className="hidden sm:inline">Salir</span>
           </Button>
         </div>
       </div>
@@ -1023,7 +1061,7 @@ function WorkspaceView({
                   onClick={resetDemo}
                   disabled={repository !== null}
                 >
-                  Reiniciar demo
+                  <RefreshCw size={15} /> Reiniciar demo
                 </Button>
               )}
             </div>
@@ -1380,7 +1418,7 @@ function DashboardView({
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+        <div className="surface-card p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Panel administrador</h2>
@@ -1422,7 +1460,25 @@ function DashboardView({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+        <div className="surface-card p-5">
+          <div className="mb-5 flex items-center gap-4">
+            <div
+              className="completion-ring"
+              style={{
+                background: `conic-gradient(#bf1830 ${metrics.completionRate}%, #f1e9ec 0)`,
+              }}
+            >
+              <span>{metrics.completionRate}%</span>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                Avance del programa
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Mentorías terminadas
+              </p>
+            </div>
+          </div>
           <h2 className="text-lg font-semibold">Iniciar un acompañamiento</h2>
           <p className="my-4 text-sm text-muted-foreground">
             Vincula un mentor con un mentoreado. Al guardar se preparan las seis
@@ -1437,7 +1493,7 @@ function DashboardView({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+      <section className="surface-card p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Requieren atención</h2>
           <Badge variant="outline">{attentionItems.length}</Badge>
@@ -1483,12 +1539,14 @@ function MentorsView({
     name: string;
     expertise: string;
     email: string;
+    password: string;
     phone: string;
   };
   setNewMentor: (value: {
     name: string;
     expertise: string;
     email: string;
+    password: string;
     phone: string;
   }) => void;
   addMentor: () => Promise<void>;
@@ -1503,68 +1561,29 @@ function MentorsView({
       <PageHeading
         eyebrow="Equipo"
         title="Mentores"
-        body="Perfiles, especialidades y datos de contacto en formato de tarjetas."
+        body="Las personas que acompañan cada proyecto. Gestiona sus perfiles y áreas de experiencia."
       />
 
       <div className="flex justify-end">
         <CreateRecordDialog
           title="Nuevo mentor"
-          description="Solo el nombre es obligatorio. Puedes completar el perfil después."
+          description="Una ficha y una cuenta de acceso, en un solo paso."
           onCreate={addMentor}
           onCancel={() =>
             setNewMentor({
               name: '',
               expertise: '',
               email: '',
+              password: '',
               phone: '',
             })
           }
         >
-          <FieldLabel label="Nombre completo">
-            <Input
-              required
-              maxLength={100}
-              value={newMentor.name}
-              onChange={(event) =>
-                setNewMentor({ ...newMentor, name: event.target.value })
-              }
-              placeholder="Nombre y apellidos"
-            />
-          </FieldLabel>
-          <FieldLabel label="Especialidades (opcional)">
-            <Input
-              maxLength={150}
-              value={newMentor.expertise}
-              onChange={(event) =>
-                setNewMentor({ ...newMentor, expertise: event.target.value })
-              }
-              placeholder="Finanzas, ventas, gestión"
-            />
-          </FieldLabel>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FieldLabel label="Correo (opcional)">
-              <Input
-                type="email"
-                maxLength={254}
-                value={newMentor.email}
-                onChange={(event) =>
-                  setNewMentor({ ...newMentor, email: event.target.value })
-                }
-                placeholder="correo@dominio.cl"
-              />
-            </FieldLabel>
-            <FieldLabel label="Teléfono (opcional)">
-              <Input
-                type="tel"
-                maxLength={30}
-                value={newMentor.phone}
-                onChange={(event) =>
-                  setNewMentor({ ...newMentor, phone: event.target.value })
-                }
-                placeholder="Ej. +56 9 1234 5678"
-              />
-            </FieldLabel>
-          </div>
+          <PersonFields
+            kind="mentor"
+            value={newMentor}
+            onChange={(patch) => setNewMentor({ ...newMentor, ...patch })}
+          />
         </CreateRecordDialog>
       </div>
 
@@ -1598,12 +1617,14 @@ function MenteesView({
     name: string;
     venture: string;
     email: string;
+    password: string;
     phone: string;
   };
   setNewMentee: (value: {
     name: string;
     venture: string;
     email: string;
+    password: string;
     phone: string;
   }) => void;
   addMentee: () => Promise<void>;
@@ -1624,62 +1645,23 @@ function MenteesView({
       <div className="flex justify-end">
         <CreateRecordDialog
           title="Nuevo mentoreado"
-          description="Solo el nombre es obligatorio. Puedes completar el emprendimiento y los datos de contacto después."
+          description="Una ficha y una cuenta de acceso, en un solo paso."
           onCreate={addMentee}
           onCancel={() =>
             setNewMentee({
               name: '',
               venture: '',
               email: '',
+              password: '',
               phone: '',
             })
           }
         >
-          <FieldLabel label="Nombre completo">
-            <Input
-              required
-              maxLength={100}
-              value={newMentee.name}
-              onChange={(event) =>
-                setNewMentee({ ...newMentee, name: event.target.value })
-              }
-              placeholder="Nombre y apellidos"
-            />
-          </FieldLabel>
-          <FieldLabel label="Emprendimiento (opcional)">
-            <Input
-              maxLength={150}
-              value={newMentee.venture}
-              onChange={(event) =>
-                setNewMentee({ ...newMentee, venture: event.target.value })
-              }
-              placeholder="Nombre del proyecto"
-            />
-          </FieldLabel>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FieldLabel label="Correo (opcional)">
-              <Input
-                type="email"
-                maxLength={254}
-                value={newMentee.email}
-                onChange={(event) =>
-                  setNewMentee({ ...newMentee, email: event.target.value })
-                }
-                placeholder="correo@dominio.cl"
-              />
-            </FieldLabel>
-            <FieldLabel label="Teléfono (opcional)">
-              <Input
-                type="tel"
-                maxLength={30}
-                value={newMentee.phone}
-                onChange={(event) =>
-                  setNewMentee({ ...newMentee, phone: event.target.value })
-                }
-                placeholder="Ej. +56 9 1234 5678"
-              />
-            </FieldLabel>
-          </div>
+          <PersonFields
+            kind="mentee"
+            value={newMentee}
+            onChange={(patch) => setNewMentee({ ...newMentee, ...patch })}
+          />
         </CreateRecordDialog>
       </div>
 
@@ -1836,7 +1818,7 @@ function MentorshipsView({
       <PageHeading
         eyebrow={role === 'Administrador' ? 'Seguimiento' : 'Trabajo asignado'}
         title={role === 'Mentoreado' ? 'Mis sesiones' : 'Mentorías'}
-        body="Estados, avances, sesiones y evidencias en tarjetas de trabajo."
+        body="Cada encuentro cuenta. Revisa avances, registra acuerdos y conserva las evidencias."
       />
 
       <div className="flex justify-end">{createAction}</div>
@@ -1942,11 +1924,11 @@ function ExportView({
       <PageHeading
         eyebrow="Salida"
         title="Exportación Excel"
-        body="El archivo se arma con hojas seleccionables, estilos y logo INACAP."
+        body="Elige qué incluir y descarga un informe listo para compartir."
       />
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+        <div className="surface-card p-5">
           <div className="grid gap-4">
             <FieldLabel label="Nombre del archivo">
               <Input
@@ -2043,7 +2025,7 @@ function ExportView({
           </div>
         </div>
 
-        <div className="rounded-lg border border-zinc-200 bg-[#0f322e] p-4 text-white shadow-sm">
+        <div className="report-preview rounded-2xl bg-zinc-950 p-6 text-white">
           <div className="mb-6 flex items-center justify-between">
             <Image
               unoptimized
@@ -2053,7 +2035,7 @@ function ExportView({
               alt="INACAP"
               className="h-12 w-auto"
             />
-            <Badge className="bg-white text-[#0f322e]">XLSX</Badge>
+            <Badge className="bg-white text-zinc-900">XLSX</Badge>
           </div>
           <h2 className="text-xl font-semibold">Monitoreo de mentorías 2026</h2>
           <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
@@ -2083,7 +2065,7 @@ function MetricCard({
   helper: string;
 }) {
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+    <article className="surface-card p-5">
       <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
         <span className="grid size-10 place-items-center rounded-xl bg-red-50 text-red-700 [&_svg]:size-4">
           {icon}
@@ -2108,12 +2090,29 @@ function PageHeading({
   body: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <p className="text-sm font-semibold text-primary">{eyebrow}</p>
-      <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-        {title}
-      </h2>
-      <p className="max-w-3xl text-sm text-muted-foreground">{body}</p>
+    <div className="page-heading">
+      <div className="relative z-10 min-w-0">
+        <p className="page-eyebrow">
+          <span />
+          {eyebrow}
+        </p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-[2.1rem]">
+          {title}
+        </h2>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+          {body}
+        </p>
+      </div>
+      <ProgramGraphic
+        variant={
+          title.includes('Excel')
+            ? 'reports'
+            : title.includes('sesiones') || title.includes('Mentorías')
+              ? 'progress'
+              : 'people'
+        }
+        compact
+      />
     </div>
   );
 }
@@ -2125,9 +2124,31 @@ function FieldLabel({
   label: string;
   children: ReactNode;
 }) {
+  const Icon = /Nombre|Mentor/.test(label)
+    ? User
+    : /Correo/.test(label)
+      ? Mail
+      : /Teléfono/.test(label)
+        ? Phone
+        : /Fecha|Mes|SIR/.test(label)
+          ? CalendarDays
+          : /Horas/.test(label)
+            ? Clock3
+            : /Objetivo|apoyo/.test(label)
+              ? Target
+              : /Espacio/.test(label)
+                ? MapPin
+                : /Estado|Formalización/.test(label)
+                  ? BadgeCheck
+                  : /Especialidad|Profesión/.test(label)
+                    ? Sparkles
+                    : BriefcaseBusiness;
   return (
     <label className="grid min-w-0 gap-1.5">
-      <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-2 text-xs font-semibold text-zinc-600">
+        <Icon className="size-3.5 text-zinc-400" aria-hidden="true" />
+        {label}
+      </span>
       {children}
     </label>
   );
@@ -2224,7 +2245,7 @@ function MentorCard({
   ) => void;
 }) {
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+    <article className="surface-card p-5">
       <div className="mb-5 flex items-center gap-4">
         <Avatar name={mentor.name} photo={mentor.photo} size="lg" />
         <div className="min-w-0">
@@ -2236,9 +2257,25 @@ function MentorCard({
           </p>
         </div>
       </div>
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {mentor.expertise.map((item) => (
+          <span key={item} className="expertise-chip">
+            <Sparkles size={11} />
+            {item}
+          </span>
+        ))}
+      </div>
+      {mentor.email && (
+        <p className="mb-4 flex items-center gap-2 break-all text-xs text-muted-foreground">
+          <Mail size={14} className="shrink-0" />
+          {mentor.email}
+        </p>
+      )}
       <details className="group">
-        <summary className="cursor-pointer rounded-lg bg-zinc-50 px-3 py-3 text-sm font-medium text-primary hover:bg-red-50">
+        <summary className="profile-edit-toggle">
+          <PencilLine size={15} className="inline mr-2" aria-hidden="true" />
           Editar ficha
+          <ChevronRight size={15} className="float-right" aria-hidden="true" />
         </summary>
         <p className="mt-3 text-xs text-muted-foreground">
           Al terminar, pulsa Guardar cambios en la barra superior. En
@@ -2281,7 +2318,7 @@ function MentorCard({
               </FieldLabel>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <FieldLabel label="Correo">
+              <FieldLabel label="Correo de contacto">
                 <Input
                   type="email"
                   maxLength={254}
@@ -2346,7 +2383,7 @@ function MenteeCard({
   ) => void;
 }) {
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+    <article className="surface-card p-5">
       <div className="mb-5 flex items-center gap-4">
         <Avatar name={mentee.name} photo={mentee.photo} size="lg" />
         <div className="min-w-0">
@@ -2358,9 +2395,30 @@ function MenteeCard({
           </p>
         </div>
       </div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {mentee.stage && (
+          <span className="expertise-chip">
+            <BriefcaseBusiness size={12} />
+            {mentee.stage}
+          </span>
+        )}
+        {mentee.need && (
+          <p className="w-full text-xs leading-relaxed text-muted-foreground line-clamp-2">
+            {mentee.need}
+          </p>
+        )}
+      </div>
+      {mentee.email && (
+        <p className="mb-4 flex items-center gap-2 break-all text-xs text-muted-foreground">
+          <Mail size={14} className="shrink-0" />
+          {mentee.email}
+        </p>
+      )}
       <details className="group">
-        <summary className="cursor-pointer rounded-lg bg-zinc-50 px-3 py-3 text-sm font-medium text-primary hover:bg-red-50">
+        <summary className="profile-edit-toggle">
+          <PencilLine size={15} className="inline mr-2" aria-hidden="true" />
           Editar ficha
+          <ChevronRight size={15} className="float-right" aria-hidden="true" />
         </summary>
         <p className="mt-3 text-xs text-muted-foreground">
           Al terminar, pulsa Guardar cambios en la barra superior. En
@@ -2405,14 +2463,14 @@ function MenteeCard({
               <FieldLabel label="Etapa del emprendimiento">
                 <Input
                   placeholder="Ej. Idea, en marcha o crecimiento"
-                  maxLength={150}
+                  maxLength={100}
                   value={mentee.stage}
                   onChange={(event) =>
                     updateMentee(mentee.id, { stage: event.target.value })
                   }
                 />
               </FieldLabel>
-              <FieldLabel label="Correo">
+              <FieldLabel label="Correo de contacto">
                 <Input
                   type="email"
                   maxLength={254}
@@ -2494,7 +2552,7 @@ function MentorshipCard({
   const progress = Math.round((completed / 6) * 100);
 
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/30">
+    <article className="surface-card p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -2582,7 +2640,7 @@ function MentorshipCard({
               />
             </FieldLabel>
           </div>
-          <details className="mt-4 rounded-xl border border-border p-4">
+          <details className="detail-panel mt-4 p-4">
             <summary className="cursor-pointer text-sm font-medium text-primary">
               Datos de la mentoría
             </summary>
@@ -2699,7 +2757,7 @@ function MentorshipCard({
         </div>
       )}
       {canManage && (
-        <details className="mt-3 rounded-xl border border-border p-4">
+        <details className="detail-panel mt-3 p-4">
           <summary className="cursor-pointer text-sm font-medium text-primary">
             Seguimiento administrativo
           </summary>
@@ -2813,7 +2871,14 @@ function SessionTile({
           {session.status}
         </Badge>
         <p className="mt-1 text-sm font-normal text-muted-foreground">
-          {session.date || 'Sin fecha'} ·{' '}
+          {session.date
+            ? new Date(`${session.date}T12:00:00`).toLocaleDateString('es-CL', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
+            : 'Sin fecha'}{' '}
+          ·{' '}
           {session.photo || session.document
             ? 'Con evidencias'
             : 'Sin evidencias'}
@@ -2999,10 +3064,22 @@ function Avatar({
     lg: 'size-24 text-2xl',
   }[size];
 
+  const palettes = [
+    ['#fae9ed', '#a3233b'],
+    ['#e9f2ee', '#296457'],
+    ['#f5eee2', '#886b34'],
+    ['#edecf5', '#62577f'],
+  ];
+  const palette =
+    palettes[
+      Array.from(name).reduce((sum, char) => sum + char.charCodeAt(0), 0) %
+        palettes.length
+    ];
   return (
     <div
+      style={photo ? undefined : { background: palette[0], color: palette[1] }}
       className={cn(
-        'grid shrink-0 place-items-center overflow-hidden rounded-lg bg-[#0f322e] font-semibold text-white',
+        'grid shrink-0 place-items-center overflow-hidden rounded-2xl bg-zinc-100 font-semibold ring-1 ring-inset ring-black/5',
         sizeClass,
       )}
     >

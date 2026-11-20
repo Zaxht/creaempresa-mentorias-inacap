@@ -11,7 +11,7 @@ Aplicación web para administrar mentores, mentoreados y sus sesiones de acompa�
 - **Mentor:** actualiza su perfil y las sesiones de sus mentorías; exporta la información a la que tiene acceso.
 - **Mentoreado:** actualiza su ficha y consulta sus mentorías y sesiones.
 
-Las altas se guardan con **Crear y guardar**. Las ediciones de fichas y sesiones se confirman con **Guardar cambios**. Cada mentoría tiene seis sesiones; cada sesión admite una foto PNG/JPEG de hasta 2 MB y un documento PDF de hasta 5 MB.
+Las altas se guardan con **Crear**. Las ediciones de fichas y sesiones se confirman con **Guardar cambios**. Cada mentoría tiene seis sesiones; cada sesión admite una foto PNG/JPEG de hasta 2 MB y un documento PDF de hasta 5 MB.
 
 La opción **Abrir demostración** utiliza datos locales del navegador. El acceso con correo y contraseña utiliza las cuentas y registros de Supabase.
 
@@ -35,9 +35,10 @@ Para una instalación nueva:
 
 1. Crear un proyecto Supabase y ejecutar `supabase/migrations/202611180001_mentorias.sql` en SQL Editor.
 2. Crear la cuenta inicial en Authentication y asignar su perfil mediante `supabase/primer-administrador.sql`, sustituyendo el UID de ejemplo.
-3. Registrar las fichas desde la aplicación. Crear las cuentas de acceso en Authentication y vincularlas mediante los ejemplos del mismo script.
+3. Aplicar `supabase/migrations/202611200001_person_accounts.sql` y desplegar `supabase/functions/create-person/index.ts` como la función `create-person`. `supabase/config.toml` configura la función; sus variables de Supabase están disponibles en el servidor. El endpoint verifica el JWT y el rol mediante PostgreSQL antes de usar Auth Admin.
+4. Desactivar **Allow new users to sign up** en Supabase Auth y configurar la longitud mínima de contraseña en 8 caracteres dentro del proveedor Email. Las cuentas del programa las crea exclusivamente el administrador desde **Nuevo mentor** o **Nuevo mentoreado**.
 
-Crear una ficha no crea automáticamente una cuenta de acceso. La migración inicial se aplica una sola vez en un proyecto nuevo.
+Las altas requieren nombre, correo con formato válido y contraseña inicial. No envían correos ni requieren SMTP: Supabase Auth crea la cuenta y un trigger la vincula a su ficha y rol. En el primer ingreso, la persona debe elegir su contraseña propia antes de acceder al programa. La contraseña no se guarda en las fichas ni en el código. Los correos ya registrados se rechazan y los reintentos no duplican cuentas. Las migraciones se aplican una sola vez, en orden.
 
 Los permisos se controlan mediante RLS y validaciones en PostgreSQL. `get_workspace()` llama al procedimiento `read_workspace` para consultar datos; `save_changes()` llama a `apply_changes` para guardar en una transacción. Los archivos se alojan en un bucket privado y se consultan mediante enlaces temporales.
 
@@ -75,6 +76,5 @@ Cada push a `main` ejecuta las comprobaciones y publica en Netlify si todas apru
 
 ## Limitaciones actuales
 
-- Las cuentas y su vinculación se administran desde Supabase.
 - Las sesiones se mantienen en memoria; recargar la página requiere iniciar sesión nuevamente. No se implementan sesión única ni límites de duración o inactividad del servidor.
 - La carga de archivos valida formato y tamaño, pero no incluye antivirus ni limpieza automática de archivos huérfanos.

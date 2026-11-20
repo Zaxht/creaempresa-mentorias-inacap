@@ -1,0 +1,3 @@
+[functions.create-person]
+# The RPC verifies the user JWT and administrator role before the Auth Admin call.
+verify_jwt = false

@@ -7,6 +7,8 @@ import {
 } from '@/lib/mentorias/repository';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InitialPassword } from './initial-password';
+import { ProgramGraphic } from './program-graphic';
 import { Eye, EyeOff, ShieldCheck, Users, ClipboardCheck } from 'lucide-react';
 
 export function MentoriasAccess({
@@ -27,6 +29,7 @@ export function MentoriasAccess({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   useEffect(() => {
     let active = true;
     void fetch('/api/config')
@@ -63,6 +66,7 @@ export function MentoriasAccess({
           (event === 'INITIAL_SESSION' && !session)
         ) {
           setWorkspace(null);
+          setMustChangePassword(false);
           if (event === 'SIGNED_OUT') setError('Sesión cerrada.');
         }
       },
@@ -72,10 +76,22 @@ export function MentoriasAccess({
   const exit = () => {
     setWorkspace(null);
     setDemo(false);
+    setMustChangePassword(false);
     if (repository) void repository.client.auth.signOut({ scope: 'local' });
   };
   if (demo || workspace)
     return children(demo ? null : repository, demo ? null : workspace, exit);
+  if (mustChangePassword && repository)
+    return (
+      <InitialPassword
+        repository={repository}
+        onComplete={(value) => {
+          setMustChangePassword(false);
+          setWorkspace(value);
+        }}
+        onExit={exit}
+      />
+    );
   return (
     <main className="access-screen min-h-screen bg-zinc-50 p-4 sm:p-8 lg:p-12">
       <div className="mx-auto grid min-h-[calc(100svh-6rem)] max-w-6xl overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl shadow-zinc-200/40 lg:grid-cols-2">
@@ -93,6 +109,9 @@ export function MentoriasAccess({
               Un espacio para conectar personas, registrar avances y dar
               continuidad a cada mentoría.
             </p>
+          </div>
+          <div className="my-8 rounded-2xl bg-white/95 w-fit pr-6 pt-4">
+            <ProgramGraphic variant="people" compact />
           </div>
           <div className="relative z-10 mt-10 grid gap-4 border-t border-white/15 pt-6 text-sm text-zinc-200">
             <p className="flex items-center gap-3">
@@ -144,7 +163,14 @@ export function MentoriasAccess({
                     throw new Error(
                       'No se pudo iniciar sesión. Revisa tus datos o espera antes de reintentar.',
                     );
-                  setWorkspace(await repository.load());
+                  const { data: access, error: accessError } =
+                    await repository.client.rpc('get_account_access');
+                  if (accessError || !access)
+                    throw new Error(
+                      'Tu cuenta no tiene acceso al programa. Contacta al administrador.',
+                    );
+                  if (access.mustChangePassword) setMustChangePassword(true);
+                  else setWorkspace(await repository.load());
                 } catch (e) {
                   await repository.client.auth.signOut({ scope: 'local' });
                   setError(

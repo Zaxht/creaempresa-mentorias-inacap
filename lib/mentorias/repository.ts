@@ -20,6 +20,52 @@ export class MentoriasRepository {
       },
     });
   }
+  async createPerson(
+    kind: 'mentors' | 'mentees',
+    record: AppState['mentors'][number] | AppState['mentees'][number],
+    password: string,
+  ): Promise<string> {
+    const { data, error } = await this.client.functions.invoke(
+      'create-person',
+      {
+        body: {
+          id: record.id,
+          kind,
+          password,
+          details: {
+            name: record.name,
+            email: record.email,
+            phone: record.phone,
+            ...(kind === 'mentors'
+              ? {
+                  expertise: (
+                    record as AppState['mentors'][number]
+                  ).expertise.join(', '),
+                }
+              : { venture: (record as AppState['mentees'][number]).venture }),
+          },
+        },
+      },
+    );
+    if (error) {
+      let message =
+        'No se pudo crear la cuenta. Reintenta con el mismo correo.';
+      if (error.context instanceof Response) {
+        try {
+          const failure = await error.context.json();
+          if (typeof failure.error === 'string') message = failure.error;
+        } catch {
+          /* Keep the recoverable error. */
+        }
+      }
+      throw new Error(message);
+    }
+    if (!data?.id)
+      throw new Error(
+        'No se pudo confirmar la cuenta. Reintenta con el mismo correo.',
+      );
+    return data.id;
+  }
   async load(): Promise<Workspace> {
     const { data, error } = await this.client.rpc('get_workspace');
     if (error) throw new Error(error.message);

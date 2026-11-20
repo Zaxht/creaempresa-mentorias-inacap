@@ -1,6 +1,13 @@
 'use client';
 import { useState, type ReactNode } from 'react';
-import { Plus } from 'lucide-react';
+import {
+  Plus,
+  UserRoundPlus,
+  UsersRound,
+  Link2,
+  ArrowRight,
+  LoaderCircle,
+} from 'lucide-react';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -27,6 +34,12 @@ export function CreateRecordDialog({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const Icon =
+    title === 'Nuevo mentor'
+      ? UserRoundPlus
+      : title === 'Nuevo mentoreado'
+        ? UsersRound
+        : Link2;
   return (
     <Dialog
       open={open}
@@ -42,12 +55,27 @@ export function CreateRecordDialog({
         {title}
       </Button>
       <DialogContent
-        className="max-h-[85svh] overflow-y-auto sm:max-w-xl p-6"
+        className="record-dialog max-h-[90svh] overflow-hidden sm:max-w-xl p-0 gap-0 flex flex-col"
         showCloseButton={!busy}
       >
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
+        <div className="record-dialog-header">
+          <div className="dialog-symbol">
+            <Icon size={25} strokeWidth={1.7} />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-primary mb-1">
+              Crea Empresa
+            </p>
+            <DialogTitle className="text-xl font-semibold tracking-tight">
+              {title}
+            </DialogTitle>
+            <DialogDescription className="mt-1.5 text-sm leading-relaxed">
+              {description}
+            </DialogDescription>
+          </div>
+        </div>
         <form
+          className="min-h-0 overflow-y-auto"
           onSubmit={async (event) => {
             event.preventDefault();
             if (busy) return;
@@ -67,7 +95,10 @@ export function CreateRecordDialog({
             }
           }}
         >
-          <fieldset disabled={busy} className="grid min-w-0 gap-4">
+          <fieldset
+            disabled={busy}
+            className="record-dialog-fields grid min-w-0 gap-4 p-6"
+          >
             {children}
             {error && (
               <p
@@ -77,7 +108,7 @@ export function CreateRecordDialog({
                 {error}
               </p>
             )}
-            <div className="mt-2 flex justify-end gap-3 border-t pt-4">
+            <div className="dialog-actions sticky bottom-0 -mx-6 -mb-6 mt-2 flex justify-end gap-3 border-t px-6 py-4">
               <Button
                 type="button"
                 variant="outline"
@@ -89,7 +120,11 @@ export function CreateRecordDialog({
               >
                 Cancelar
               </Button>
-              <Button type="submit">{busy ? 'Guardando…' : 'Crear'}</Button>
+              <Button type="submit">
+                {busy && <LoaderCircle size={16} className="animate-spin" />}
+                {busy ? 'Creando…' : 'Crear'}
+                {!busy && <ArrowRight size={16} />}
+              </Button>
             </div>
           </fieldset>
         </form>
