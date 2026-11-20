@@ -365,7 +365,6 @@ function WorkspaceView({
   const [exportMessage, setExportMessage] = useState('');
   const [newMentor, setNewMentor] = useState({
     name: '',
-    title: '',
     expertise: '',
     email: '',
     phone: '',
@@ -657,7 +656,7 @@ function WorkspaceView({
     const mentor: Mentor = {
       id: crypto.randomUUID(),
       name,
-      title: newMentor.title.trim() || 'Mentor/a',
+      title: '',
       email: newMentor.email.trim(),
       phone: newMentor.phone.trim(),
       expertise: newMentor.expertise
@@ -671,7 +670,7 @@ function WorkspaceView({
     setActiveMentorId(mentor.id);
     if (!mentors.some((m) => m.id === newMentorship.mentorId))
       setNewMentorship((current) => ({ ...current, mentorId: mentor.id }));
-    setNewMentor({ name: '', title: '', expertise: '', email: '', phone: '' });
+    setNewMentor({ name: '', expertise: '', email: '', phone: '' });
   };
 
   const addMentee = async () => {
@@ -1464,14 +1463,12 @@ function MentorsView({
   mentorships: Mentorship[];
   newMentor: {
     name: string;
-    title: string;
     expertise: string;
     email: string;
     phone: string;
   };
   setNewMentor: (value: {
     name: string;
-    title: string;
     expertise: string;
     email: string;
     phone: string;
@@ -1499,7 +1496,6 @@ function MentorsView({
           onCancel={() =>
             setNewMentor({
               name: '',
-              title: '',
               expertise: '',
               email: '',
               phone: '',
@@ -1515,16 +1511,6 @@ function MentorsView({
                 setNewMentor({ ...newMentor, name: event.target.value })
               }
               placeholder="Nuevo mentor"
-            />
-          </FieldLabel>
-          <FieldLabel label="Profesión o cargo">
-            <Input
-              maxLength={150}
-              value={newMentor.title}
-              onChange={(event) =>
-                setNewMentor({ ...newMentor, title: event.target.value })
-              }
-              placeholder="Mentor/a"
             />
           </FieldLabel>
           <FieldLabel label="Especialidades">
@@ -2205,8 +2191,10 @@ function MentorCard({
                   }
                 />
               </FieldLabel>
-              <FieldLabel label="Perfil">
+              <FieldLabel label="Profesión (opcional)">
                 <Input
+                  maxLength={150}
+                  placeholder="Ej. Contador auditor"
                   value={mentor.title}
                   onChange={(event) =>
                     updateMentor(mentor.id, { title: event.target.value })
